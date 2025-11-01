@@ -109,3 +109,107 @@ The system provides three progressive layers of functionality:
 - **Physician Control:** Human oversight at appropriate decision points  
 - **Seamless Integration:** FHIR-compliant EHR connectivity  
 - **Continuous Learning:** Improves from physician feedback and corrections  
+
+## Technical Architecture
+### High-Level Architecture
+```
++-------------------------------------------------------------+
+|                    Presentation Layer                       |
+|  +------------+  +--------------+  +------------+           |
+|  |  Web App   |  |  Mobile App  |  |    API     |           |
+|  |  (React)   |  | (React Native)| |  Gateway   |           |
+|  +------------+  +--------------+  +------------+           |
++-------------------------------------------------------------+
+                             |
++-------------------------------------------------------------+
+|                    Application Layer                        |
+|  +------------+  +--------------+  +------------+           |
+|  |Transcription| |Documentation |  |  Workflow  |           |
+|  |   Service   | |    Service   |  |   Service  |           |
+|  +------------+  +--------------+  +------------+           |
+|  +------------+  +--------------+  +------------+           |
+|  |   Coding    | |     RAG      |  |   Agent    |           |
+|  |   Service   | |    Service   |  | Orchestration|         |
+|  +------------+  +--------------+  +------------+           |
++-------------------------------------------------------------+
+                             |
++-------------------------------------------------------------+
+|                       AI/ML Layer                           |
+|  +------------+  +--------------+  +------------+           |
+|  |  Whisper   |  |   Medical    |  |  Document  |           |
+|  |   (ASR)    |  |     LLM      |  |   Agent    |           |
+|  +------------+  +--------------+  +------------+           |
+|  +------------+  +--------------+  +------------+           |
+|  | Embedding  |  |    Coding    |  |  Workflow  |           |
+|  |   Model    |  |     LLM      |  |   Agents   |           |
+|  +------------+  +--------------+  +------------+           |
++-------------------------------------------------------------+
+                             |
++-------------------------------------------------------------+
+|                       Data Layer                            |
+|  +------------+  +--------------+  +------------+           |
+|  | PostgreSQL |  |    Vector    |  |    Redis   |           |
+|  |  (Primary) |  |   Database   |  |   (Cache)  |           |
+|  +------------+  +--------------+  +------------+           |
+|  +------------+  +--------------+  +------------+           |
+|  |  S3/Blob   |  |   MongoDB    |  |Elasticsearch|          |
+|  |  (Audio)   |  | (Documents)  |  |   (Search) |          |
+|  +------------+  +--------------+  +------------+           |
++-------------------------------------------------------------+
+                             |
++-------------------------------------------------------------+
+|                    Integration Layer                        |
+|  +------------+  +--------------+  +------------+           |
+|  |    FHIR    |  |   HL7 v2     |  |   SMART    |           |
+|  |  Adapter   |  |   Adapter    |  |  on FHIR   |           |
+|  +------------+  +--------------+  +------------+           |
+|  +------------------------------------------------------+  |
+|  |        EHR Systems (Epic, Cerner, etc.)              |  |
+|  +------------------------------------------------------+  |
++-------------------------------------------------------------+
+```
+
+### Technology Stack
+#### Frontend
+- Web Application: React 18+, TypeScript, TailwindCSS  
+- Mobile Application: React Native (iOS/Android)  
+- State Management: Redux Toolkit or Zustand  
+- Real-time Updates: WebSockets  
+
+#### Backend
+- API Layer: Node.js with Express or Python with FastAPI  
+- Microservices: Docker containers, Kubernetes orchestration  
+- Message Queue: RabbitMQ or Apache Kafka  
+- API Gateway: Kong or AWS API Gateway  
+
+#### AI/ML Stack
+- Speech Recognition: OpenAI Whisper (large-v3)  
+- Speaker Diarization: Pyannote.audio  
+- LLMs:
+  - General: Claude 3.5 Sonnet, GPT-4  
+  - Medical-specific: Med-PaLM 2 (if available)  
+  - Coding: Fine-tuned models on coding data  
+- Embeddings: text-embedding-3-large or BioClinicalBERT  
+- Agent Framework: LangGraph or CrewAI  
+- Vector Database: Pinecone, Weaviate, or pgvector  
+
+#### Data Storage
+- Primary Database: PostgreSQL 15+ with encryption  
+- Vector Store: Pinecone or Weaviate for RAG  
+- Document Store: MongoDB for unstructured data  
+- Object Storage: AWS S3 or Azure Blob (encrypted)  
+- Cache: Redis for session and performance  
+- Search: Elasticsearch for full-text search  
+
+#### Integration
+- FHIR Server: HAPI FHIR or Azure FHIR Service  
+- HL7 Integration: Mirth Connect  
+- Authentication: Auth0 or Okta with SAML/OAuth  
+
+#### Infrastructure
+- Cloud Provider: AWS, Azure, or GCP (HIPAA-compliant regions)  
+- Infrastructure as Code: Terraform  
+- CI/CD: GitHub Actions or GitLab CI  
+- Monitoring: Datadog, New Relic, or Prometheus + Grafana  
+- Logging: ELK Stack or AWS CloudWatch  
+- Security: WAF, DDoS protection, SIEM  
