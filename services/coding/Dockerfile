@@ -1,7 +1,12 @@
-FROM node:20-alpine
+﻿FROM node:20-alpine
 
-# Placeholder Dockerfile for the coding service.
-# Replace with the actual runtime image and build steps when the service is implemented.
+# Container image for the coding lookup service.
 WORKDIR /app
-COPY package.json .
-CMD ["node", "-e", "console.log('Coding service container placeholder')"]
+
+COPY services/coding/package.json package.json
+COPY services/coding/src src
+
+RUN npm install --omit=dev
+
+EXPOSE 8082
+CMD ["node", "src/server.js"]

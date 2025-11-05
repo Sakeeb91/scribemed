@@ -1,7 +1,12 @@
-FROM node:20-alpine
+﻿FROM node:20-alpine
 
-# Placeholder Dockerfile for the documentation service.
-# Replace with the actual runtime image and build steps when the service is implemented.
+# Container image for the documentation service.
 WORKDIR /app
-COPY package.json .
-CMD ["node", "-e", "console.log('Documentation service container placeholder')"]
+
+COPY services/documentation/package.json package.json
+COPY services/documentation/src src
+
+RUN npm install --omit=dev
+
+EXPOSE 8081
+CMD ["node", "src/server.js"]

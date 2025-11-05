@@ -1,0 +1,13 @@
+﻿{
+  "name": "@scribemed/coding-service",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Maps encounters to billing codes with guardrail logging.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "lint": "node --check src/server.js",
+    "test": "node --test tests/*.test.js",
+    "build": "node --check src/server.js"
+  }
+}

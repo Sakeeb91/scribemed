@@ -1,7 +1,14 @@
-FROM node:20-alpine
+﻿FROM node:20-alpine
 
-# Placeholder Dockerfile for the transcription service.
-# Replace with the actual runtime image and build steps when the service is implemented.
+# Container image for the transcription facade. The image stays slim by
+# depending solely on Node''s standard library.
 WORKDIR /app
-COPY package.json .
-CMD ["node", "-e", "console.log('Transcription service container placeholder')"]
+
+# Copy only the files this service needs.
+COPY services/transcription/package.json package.json
+COPY services/transcription/src src
+
+RUN npm install --omit=dev
+
+EXPOSE 8080
+CMD ["node", "src/server.js"]

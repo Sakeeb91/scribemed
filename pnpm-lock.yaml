@@ -5,9 +5,11 @@ settings:
   excludeLinksFromLockfile: false
 
 importers:
-  .:
-    specifiers: {}
-    dependencies: {}
-    devDependencies: {}
 
-packages: {}
+  .: {}
+
+  services/coding: {}
+
+  services/documentation: {}
+
+  services/transcription: {}
