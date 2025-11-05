@@ -1,0 +1,5 @@
+node_modules/
+dist/
+.tools/
+infrastructure/terraform/.terraform/
+infrastructure/terraform/.terraform.lock.hcl

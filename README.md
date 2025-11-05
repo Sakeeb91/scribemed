@@ -213,3 +213,7 @@ The system provides three progressive layers of functionality:
 - Monitoring: Datadog, New Relic, or Prometheus + Grafana  
 - Logging: ELK Stack or AWS CloudWatch  
 - Security: WAF, DDoS protection, SIEM  
+## Database Schema
+
+- packages/database contains the Flyway migrations, connection helper, and developer tooling.
+- Extended documentation lives under docs/database (ERD, data dictionary, migration guide, rollback, optimisation).
