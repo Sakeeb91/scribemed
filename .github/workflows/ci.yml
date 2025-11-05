@@ -1,0 +1,301 @@
+name: Continuous Integration
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+  push:
+    branches:
+      - main
+      - develop
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.filter.outputs.changes }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Detect impacted services
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            transcription:
+              - "services/transcription/**"
+            documentation:
+              - "services/documentation/**"
+            coding:
+              - "services/coding/**"
+
+  lint:
+    name: Lint & Static Checks
+    runs-on: ubuntu-latest
+    needs: changes
+    env:
+      PNPM_CACHE_FOLDER: ~/.pnpm-store
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Run ESLint
+        run: pnpm run lint
+      - name: Check formatting
+        run: pnpm run format:check
+      - name: Type check
+        run: pnpm run type-check
+
+  test:
+    name: Test (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    needs: lint
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version:
+          - 18
+          - 20
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: aimedocs_test
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/aimedocs_test
+      REDIS_URL: redis://localhost:6379
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Run database migrations
+        run: pnpm run migrate
+      - name: Run unit tests
+        run: pnpm run test:unit
+      - name: Run integration tests
+        run: pnpm run test:integration
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.node-version }}
+          path: coverage
+          if-no-files-found: ignore
+
+  security-scan:
+    name: Security Scans
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Run Snyk scan
+        if: secrets.SNYK_TOKEN != ''
+        uses: snyk/actions/node@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          command: test
+          args: --severity-threshold=medium
+      - name: Run Trivy filesystem scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
+          format: sarif
+          output: trivy-results.sarif
+      - name: Upload Trivy results
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-results
+          path: trivy-results.sarif
+
+  hipaa-compliance:
+    name: HIPAA Compliance Checks
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Run PHI exposure audit
+        run: |
+          bash scripts/ci/check-phi-exposure.sh
+
+  build:
+    name: Build & Push Containers
+    runs-on: ubuntu-latest
+    needs:
+      - security-scan
+      - hipaa-compliance
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - transcription
+          - documentation
+          - coding
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push ${{ matrix.service }}
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: services/${{ matrix.service }}/Dockerfile
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          tags: |
+            ghcr.io/${{ github.repository }}/${{ matrix.service }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+        continue-on-error: true
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs:
+      - build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment:
+      name: staging
+      url: https://staging.aimedocs.example.com
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Configure kubectl context
+        uses: azure/k8s-set-context@v3
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.KUBE_CONFIG_STAGING }}
+      - name: Deploy manifests
+        run: |
+          kubectl apply -f infra/kubernetes/staging
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment --all -n staging --timeout=10m
+      - name: Run staging health checks
+        run: |
+          bash scripts/ci/health-check-staging.sh
+      - name: Notify Slack
+        if: secrets.SLACK_WEBHOOK != ''
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          fields: repo,commit,author,action,eventName,workflow
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+          text: "Staging deployment ${{ job.status }}"
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    environment:
+      name: production
+      url: https://app.aimedocs.example.com
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Configure kubectl context
+        uses: azure/k8s-set-context@v3
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.KUBE_CONFIG_PROD }}
+      - name: Deploy manifests
+        run: |
+          kubectl apply -f infra/kubernetes/production
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment --all -n production --timeout=10m
+      - name: Run production health checks
+        run: |
+          bash scripts/ci/health-check-production.sh
+      - name: Create deployment record
+        env:
+          DATADOG_API_URL: ${{ secrets.DATADOG_API_URL }}
+          DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+        run: |
+          if [ -n "$DATADOG_API_URL" ] && [ -n "$DATADOG_API_KEY" ]; then
+            curl -X POST "$DATADOG_API_URL/api/v1/events" \
+              -H "DD-API-KEY: $DATADOG_API_KEY" \
+              -H "Content-Type: application/json" \
+              -d "{\"title\":\"Production Deployment\",\"text\":\"Deployed ${{ github.ref_name }}\",\"tags\":[\"environment:production\",\"deployment\"]}"
+          else
+            echo "Datadog configuration missing; skipping event creation."
+          fi
+      - name: Notify Slack
+        if: secrets.SLACK_WEBHOOK != ''
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          fields: repo,commit,author,ref
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+          text: "🚀 Production deployment ${{ job.status }}"

@@ -1,0 +1,17 @@
+{
+  "name": "scribemed-monorepo",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Placeholder monorepo scaffolding for Scribemed CI/CD pipeline.",
+  "packageManager": "pnpm@8.15.4",
+  "scripts": {
+    "lint": "node scripts/ci/pipeline-task.js lint",
+    "format:check": "node scripts/ci/pipeline-task.js format:check",
+    "type-check": "node scripts/ci/pipeline-task.js type-check",
+    "migrate": "node scripts/ci/pipeline-task.js migrate",
+    "test:unit": "node scripts/ci/pipeline-task.js test:unit",
+    "test:integration": "node scripts/ci/pipeline-task.js test:integration",
+    "coverage": "node scripts/ci/pipeline-task.js coverage",
+    "build": "node scripts/ci/pipeline-task.js build"
+  }
+}
