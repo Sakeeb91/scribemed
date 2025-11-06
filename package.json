@@ -10,13 +10,13 @@
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
-    "test": "turbo run test",
-    "test:unit": "turbo run test:unit",
-    "test:integration": "turbo run test:integration",
-    "lint": "turbo run lint",
+    "test": "pnpm run test:unit && pnpm run test:integration",
+    "test:unit": "node --test \"tests/unit/**/*.js\"",
+    "test:integration": "node --test \"tests/integration/**/*.js\"",
+    "lint": "pnpm exec eslint . --ext .ts,.tsx,.js,.jsx --ignore-pattern dist --ignore-pattern build",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
-    "type-check": "turbo run type-check",
+    "type-check": "pnpm exec tsc --noEmit",
     "clean": "turbo run clean && rm -rf node_modules",
     "prepare": "husky install"
   },
@@ -30,6 +30,7 @@
     ]
   },
   "devDependencies": {
+    "@scribemed/tooling": "workspace:*",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
     "eslint": "^8.50.0",
@@ -39,7 +40,8 @@
     "lint-staged": "^14.0.1",
     "prettier": "^3.0.3",
     "turbo": "^1.10.0",
-    "typescript": "^5.2.0"
+    "typescript": "^5.2.0",
+    "@types/node": "^20.11.30"
   },
   "packageManager": "pnpm@8.7.0",
   "engines": {
