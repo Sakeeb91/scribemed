@@ -1,0 +1,16 @@
+{
+  "name": "@scribemed/documentation-service",
+  "version": "0.0.1",
+  "private": true,
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "node src/server.js",
+    "lint": "pnpm exec eslint src --ext .js",
+    "type-check": "pnpm exec tsc --noEmit",
+    "test": "node --test tests",
+    "test:unit": "node --test tests",
+    "test:integration": "node --test tests",
+    "build": "node ./scripts/build.cjs",
+    "clean": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\""
+  }
+}
