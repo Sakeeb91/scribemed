@@ -204,7 +204,8 @@ jobs:
       - name: Run staging smoke tests
         run: scripts/ci/health-check-staging.sh
       - name: Notify Slack
-        if: secrets.SLACK_WEBHOOK != ''
+        if: always()
+        continue-on-error: true
         uses: slackapi/slack-github-action@v1.25.0
         with:
           payload: |
@@ -235,7 +236,8 @@ jobs:
       - name: Run production smoke tests
         run: scripts/ci/health-check-production.sh
       - name: Notify Slack
-        if: secrets.SLACK_WEBHOOK != ''
+        if: always()
+        continue-on-error: true
         uses: slackapi/slack-github-action@v1.25.0
         with:
           payload: |
