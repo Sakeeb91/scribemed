@@ -21,3 +21,37 @@ test('templates endpoint returns default SOAP structure', async (t) => {
   const payload = await response.json();
   assert.equal(payload.plan, 'Rest, hydration, and follow-up in one week.');
 });
+
+test('GET /health returns health status', async (t) => {
+  const { server, url } = await startServer();
+  t.after(() => server.close());
+
+  const response = await fetch(`${url}/health`);
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.service, 'documentation');
+  assert(payload.status);
+  assert(payload.timestamp);
+});
+
+test('GET /health/live returns liveness status', async (t) => {
+  const { server, url } = await startServer();
+  t.after(() => server.close());
+
+  const response = await fetch(`${url}/health/live`);
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.service, 'documentation');
+  assert.equal(payload.status, 'healthy');
+});
+
+test('GET /health/ready returns readiness status', async (t) => {
+  const { server, url } = await startServer();
+  t.after(() => server.close());
+
+  const response = await fetch(`${url}/health/ready`);
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.service, 'documentation');
+  assert(payload.status);
+});

@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: transcription-service
+  namespace: staging
+  labels:
+    app: transcription-service
+    app.kubernetes.io/name: scribemed
+    app.kubernetes.io/environment: staging
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: transcription-service
+  template:
+    metadata:
+      labels:
+        app: transcription-service
+        app.kubernetes.io/name: scribemed
+        app.kubernetes.io/environment: staging
+    spec:
+      containers:
+        - name: transcription-service
+          image: scribemed/transcription-service:latest
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: PORT
+              value: '8080'
+            - name: ENVIRONMENT
+              value: staging
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              memory: '256Mi'
+              cpu: '100m'
+            limits:
+              memory: '512Mi'
+              cpu: '500m'
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: transcription-service
+  namespace: staging
+  labels:
+    app: transcription-service
+    app.kubernetes.io/name: scribemed
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app: transcription-service
+
