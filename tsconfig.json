@@ -5,7 +5,7 @@
     "moduleResolution": "Node",
     "lib": ["ES2020", "DOM"],
     "strict": true,
-    "allowJs": false,
+    "allowJs": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
@@ -19,6 +19,6 @@
       "@docs/*": ["docs/*"]
     }
   },
-  "include": ["apps", "services", "packages", "infrastructure", "docs"],
+  "include": ["apps", "services", "packages", "infrastructure", "docs", "tests", "scripts"],
   "exclude": ["node_modules", "dist", "build", "coverage", ".turbo"]
 }
