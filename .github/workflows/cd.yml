@@ -1,36 +1,71 @@
-name: CD
+name: Continuous Deployment
 
 on:
   workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment to deploy"
+        required: true
+        default: staging
+        type: choice
+        options:
+          - staging
+          - production
   push:
-    branches:
-      - main
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: read
 
 jobs:
-  deploy:
+  prepare:
     runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.set-env.outputs.environment }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          cache: 'pnpm'
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: 8.7.0
-
-      - name: Install dependencies
-        run: pnpm install
-
-      - name: Build packages
-        run: pnpm build
-
-      - name: Deploy
+      - id: set-env
         run: |
-          echo "Add deployment commands here"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "environment=${{ github.event.inputs.environment }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "environment=production" >> "$GITHUB_OUTPUT"
+          fi
+
+  deploy:
+    needs: prepare
+    runs-on: ubuntu-latest
+    environment: ${{ needs.prepare.outputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select kubeconfig secret
+        id: kubeconfig
+        run: |
+          if [ "${{ needs.prepare.outputs.environment }}" = "staging" ]; then
+            echo "secret=${{ secrets.KUBE_CONFIG_STAGING }}" >> "$GITHUB_OUTPUT"
+            echo "health_script=scripts/ci/health-check-staging.sh" >> "$GITHUB_OUTPUT"
+          else
+            echo "secret=${{ secrets.KUBE_CONFIG_PROD }}" >> "$GITHUB_OUTPUT"
+            echo "health_script=scripts/ci/health-check-production.sh" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Configure kubectl
+        uses: azure/k8s-set-context@v3
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ steps.kubeconfig.outputs.secret }}
+      - name: Apply manifests
+        run: |
+          kubectl apply -f infrastructure/kubernetes/${{ needs.prepare.outputs.environment }}
+      - name: Run environment smoke checks
+        run: ${{ steps.kubeconfig.outputs.health_script }}
+      - name: Notify Slack
+        if: secrets.SLACK_WEBHOOK != ''
+        uses: slackapi/slack-github-action@v1.25.0
+        with:
+          payload: |
+            {
+              "text": "Deployment to ${{ needs.prepare.outputs.environment }} completed with status ${{ job.status }}"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
 
