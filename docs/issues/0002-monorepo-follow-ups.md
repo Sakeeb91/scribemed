@@ -33,6 +33,18 @@ During the initial bootstrap of the repository we identified a few areas that co
 - Documentation and template files match Prettier expectations (no diffs when running `pnpm format:check`).
 - Runbook added or existing documentation updated to clarify commit strategy expectations.
 
+## Status: Completed
+
+All acceptance criteria have been met:
+
+- ✅ Lockfile (`pnpm-lock.yaml`) checked into repository and CI verifies it via `--frozen-lockfile`
+- ✅ Turbo `lint`/`dev` commands execute successfully (verified in CI workflows)
+- ✅ Documentation and template files match Prettier expectations (`pnpm format:check` passes)
+- ✅ Commit strategy documented in `CONTRIBUTING.md` with Husky and lint-staged workflow
+
+Completed as part of CI/CD implementation (issue #15).
+
 ## References
 
 - Original scaffolding work: issue #1 (Initialize Monorepo with Turborepo)
+- Related work: issue #2, issue #15 (CI/CD Pipeline implementation)
