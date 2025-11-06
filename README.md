@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🏥 ScribeMed
+# ScribeMed
 
 **AI-Powered Medical Documentation Assistant**
 
@@ -16,23 +16,23 @@ _Streamlining healthcare documentation with intelligent transcription, coding, a
 
 ---
 
-## ✨ Overview
+## Overview
 
 ScribeMed is a comprehensive healthcare documentation platform that leverages AI to automate medical transcription, clinical coding, and documentation workflows. Built as a modern monorepo, it provides scalable microservices architecture for healthcare organizations seeking to reduce administrative burden and improve documentation accuracy.
 
-### 🎯 Key Features
+### Key Features
 
-- 🎤 **Real-time Audio Transcription** - High-accuracy speech-to-text for clinical encounters
-- 📝 **Intelligent Documentation** - AI-powered clinical note generation
-- 🏷️ **Automated Coding** - ICD-10 and CPT code suggestions
-- 🔍 **RAG-Powered Retrieval** - Context-aware information retrieval
-- 🔄 **FHIR Integration** - Standards-compliant healthcare data exchange
-- 🎛️ **Agent Orchestration** - Coordinated multi-service workflows
-- 📱 **Multi-Platform** - Web, mobile, and admin interfaces
+- **Real-time Audio Transcription** - High-accuracy speech-to-text for clinical encounters
+- **Intelligent Documentation** - AI-powered clinical note generation
+- **Automated Coding** - ICD-10 and CPT code suggestions
+- **RAG-Powered Retrieval** - Context-aware information retrieval
+- **FHIR Integration** - Standards-compliant healthcare data exchange
+- **Agent Orchestration** - Coordinated multi-service workflows
+- **Multi-Platform** - Web, mobile, and admin interfaces
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
@@ -67,7 +67,7 @@ pnpm run db:seed:dev
 pnpm run dev
 ```
 
-### 🛠️ Available Commands
+### Available Commands
 
 | Command                 | Description                                |
 | ----------------------- | ------------------------------------------ |
@@ -88,17 +88,17 @@ pnpm run dev
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 scribemed/
-├── 📱 apps/                    # End-user applications
+├── apps/                       # End-user applications
 │   ├── web/                    # Web application
 │   ├── mobile/                 # Mobile application
 │   ├── admin-portal/           # Admin dashboard
 │   └── api-gateway/            # API gateway service
 │
-├── ⚙️ services/                # Backend microservices
+├── services/                   # Backend microservices
 │   ├── transcription/          # Audio transcription service
 │   ├── documentation/          # Clinical note generation
 │   ├── coding/                 # Medical coding service
@@ -107,7 +107,7 @@ scribemed/
 │   ├── audio-capture/          # Audio capture service
 │   └── fhir-adapter/           # FHIR integration
 │
-├── 📦 packages/                # Shared libraries
+├── packages/                   # Shared libraries
 │   ├── database/               # Database migrations & connection
 │   ├── auth/                   # Authentication utilities
 │   ├── logging/                # Logging infrastructure
@@ -117,13 +117,13 @@ scribemed/
 │   ├── ui-components/          # Reusable UI components
 │   └── utils/                  # Common utilities
 │
-├── 🏗️ infrastructure/          # Infrastructure as code
+├── infrastructure/             # Infrastructure as code
 │   ├── terraform/              # Terraform configurations
 │   ├── kubernetes/             # K8s manifests
 │   ├── docker/                 # Docker configurations
 │   └── scripts/                # Deployment scripts
 │
-└── 📚 docs/                    # Documentation
+└── docs/                       # Documentation
     ├── architecture/           # Architecture documentation
     ├── api/                    # API specifications
     ├── database/               # Database documentation
@@ -134,7 +134,7 @@ scribemed/
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ScribeMed follows a **monorepo architecture** powered by [Turborepo](https://turbo.build/repo) for efficient builds and task orchestration. The platform is organized into:
 
@@ -143,20 +143,20 @@ ScribeMed follows a **monorepo architecture** powered by [Turborepo](https://tur
 - **Packages** (`packages/`) - Shared libraries and utilities
 - **Infrastructure** (`infrastructure/`) - IaC and deployment configurations
 
-### 📖 Documentation
+### Documentation
 
 Comprehensive documentation is available in the `docs/` directory:
 
-- 📐 [Architecture Overview](docs/architecture/OVERVIEW.md) - System design and architecture decisions
-- 🗄️ [Database Documentation](docs/database/README.md) - Schema, migrations, and data dictionary
-- 🔌 [API Documentation](docs/api/README.md) - API specifications and endpoints
-- 🚀 [CI/CD Guide](docs/ci-cd/README.md) - Continuous integration and deployment
-- 📋 [Compliance](docs/compliance/README.md) - Healthcare compliance and security
-- 📘 [Runbooks](docs/runbooks/README.md) - Operational procedures
+- [Architecture Overview](docs/architecture/OVERVIEW.md) - System design and architecture decisions
+- [Database Documentation](docs/database/README.md) - Schema, migrations, and data dictionary
+- [API Documentation](docs/api/README.md) - API specifications and endpoints
+- [CI/CD Guide](docs/ci-cd/README.md) - Continuous integration and deployment
+- [Compliance](docs/compliance/README.md) - Healthcare compliance and security
+- [Runbooks](docs/runbooks/README.md) - Operational procedures
 
 ---
 
-## 🧪 Development
+## Development
 
 ### Development Workflow
 
@@ -195,7 +195,7 @@ Comprehensive documentation is available in the `docs/` directory:
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for:
 
@@ -206,15 +206,15 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 ### Quick Contribution Checklist
 
-- ✅ Code follows project style guidelines
-- ✅ Tests added/updated and passing
-- ✅ Documentation updated
-- ✅ Linting and type checking passes
-- ✅ No breaking changes (or documented if necessary)
+- Code follows project style guidelines
+- Tests added/updated and passing
+- Documentation updated
+- Linting and type checking passes
+- No breaking changes (or documented if necessary)
 
 ---
 
-## 🔒 Security & Compliance
+## Security & Compliance
 
 ScribeMed handles Protected Health Information (PHI) and adheres to healthcare compliance standards:
 
@@ -227,13 +227,13 @@ For security concerns, please contact the maintainers directly.
 
 ---
 
-## 📄 License
+## License
 
 This project is private and proprietary. All rights reserved.
 
 ---
 
-## 🔗 Links
+## Links
 
 - [Architecture Documentation](docs/architecture/OVERVIEW.md)
 - [Database Schema](docs/database/ERD.md)
@@ -244,7 +244,7 @@ This project is private and proprietary. All rights reserved.
 
 <div align="center">
 
-**Built with ❤️ for healthcare professionals**
+**Built for healthcare professionals**
 
 [Report Bug](https://github.com/Sakeeb91/scribemed/issues) · [Request Feature](https://github.com/Sakeeb91/scribemed/issues)
 
