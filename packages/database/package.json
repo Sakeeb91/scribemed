@@ -1,0 +1,27 @@
+{
+  "name": "@scribemed/database",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rimraf dist",
+    "migrate": "flyway migrate -configFiles=flyway.conf",
+    "migrate:info": "flyway info -configFiles=flyway.conf",
+    "migrate:undo": "flyway undo -configFiles=flyway.conf",
+    "seed:dev": "node ./scripts/run-seed.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-secrets-manager": "^3.624.0",
+    "@scribemed/logging": "workspace:*",
+    "flyway": "^0.1.9",
+    "pg": "^8.12.0"
+  },
+  "devDependencies": {
+    "@types/node": "workspace:*",
+    "@types/pg": "^8.11.6",
+    "rimraf": "^6.0.1",
+    "typescript": "workspace:*"
+  }
+}
