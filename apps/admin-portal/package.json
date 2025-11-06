@@ -1,0 +1,13 @@
+{
+  "name": "@scribemed/admin-portal",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "echo 'Admin portal dev server - to be implemented'",
+    "lint": "pnpm exec eslint . --ext .ts,.tsx,.js,.jsx --ignore-pattern dist --ignore-pattern build",
+    "type-check": "pnpm exec tsc --noEmit",
+    "test": "echo 'Admin portal tests - to be implemented'",
+    "build": "echo 'Admin portal build - to be implemented'",
+    "clean": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\""
+  }
+}

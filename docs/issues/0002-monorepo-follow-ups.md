@@ -33,16 +33,19 @@ During the initial bootstrap of the repository we identified a few areas that co
 - Documentation and template files match Prettier expectations (no diffs when running `pnpm format:check`).
 - Runbook added or existing documentation updated to clarify commit strategy expectations.
 
-## Status: Completed
+## Status: In Progress
 
-All acceptance criteria have been met:
+### Completed
 
 - ✅ Lockfile (`pnpm-lock.yaml`) checked into repository and CI verifies it via `--frozen-lockfile`
-- ✅ Turbo `lint`/`dev` commands execute successfully (verified in CI workflows)
 - ✅ Documentation and template files match Prettier expectations (`pnpm format:check` passes)
-- ✅ Commit strategy documented in `CONTRIBUTING.md` with Husky and lint-staged workflow
+- ✅ Services have `package.json` files with `dev`, `lint`, and `test` scripts
 
-Completed as part of CI/CD implementation (issue #15).
+### Remaining Tasks
+
+- ⏳ Add `package.json` files to `apps/*` folders with placeholder scripts
+- ⏳ Add multi-stage commit workflow documentation to `docs/runbooks/`
+- ⏳ Verify Turbo `lint`/`dev` commands execute successfully across all workspaces
 
 ## References
 
