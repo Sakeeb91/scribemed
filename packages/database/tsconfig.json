@@ -11,7 +11,7 @@
     "skipLibCheck": true,
     "baseUrl": ".",
     "paths": {
-      "@scribemed/logging": ["../logging/src"]
+      "@scribemed/logging": ["../logging/dist"]
     }
   },
   "include": ["src/**/*.ts"],

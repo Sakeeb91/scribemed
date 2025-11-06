@@ -9,8 +9,8 @@
     "clean": "rimraf dist"
   },
   "devDependencies": {
-    "@types/node": "workspace:*",
+    "@types/node": "^20.11.30",
     "rimraf": "^6.0.1",
-    "typescript": "workspace:*"
+    "typescript": "^5.2.0"
   }
 }
