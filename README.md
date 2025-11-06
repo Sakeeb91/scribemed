@@ -63,7 +63,7 @@ scribemed/
 └── README.md
 ```
 
-See `docs/architecture/OVERVIEW.md` and `docs/ci-cd/README.md` for more details.
+See `docs/architecture/OVERVIEW.md`, `docs/ci-cd/README.md`, and `docs/database/README.md` for more details.
 
 ## Contributing
 
