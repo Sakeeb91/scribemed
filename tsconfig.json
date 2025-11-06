@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "Node",
+    "lib": ["ES2020", "DOM"],
+    "strict": true,
+    "allowJs": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "baseUrl": ".",
+    "paths": {
+      "@apps/*": ["apps/*"],
+      "@services/*": ["services/*"],
+      "@packages/*": ["packages/*"],
+      "@infrastructure/*": ["infrastructure/*"],
+      "@docs/*": ["docs/*"]
+    }
+  },
+  "include": ["apps", "services", "packages", "infrastructure", "docs"],
+  "exclude": ["node_modules", "dist", "build", "coverage", ".turbo"]
+}
