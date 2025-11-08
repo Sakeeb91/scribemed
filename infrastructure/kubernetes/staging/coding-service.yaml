@@ -22,6 +22,7 @@ spec:
       containers:
         - name: coding-service
           image: ghcr.io/sakeeb91/scribemed/coding-service:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8082
               name: http
