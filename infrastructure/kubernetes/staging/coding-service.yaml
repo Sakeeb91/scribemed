@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
         - name: coding-service
-          image: scribemed/coding-service:latest
+          image: ghcr.io/sakeeb91/scribemed/coding-service:latest
           ports:
             - containerPort: 8082
               name: http
@@ -71,4 +71,3 @@ spec:
       name: http
   selector:
     app: coding-service
-

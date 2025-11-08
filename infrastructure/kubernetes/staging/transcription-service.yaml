@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
         - name: transcription-service
-          image: scribemed/transcription-service:latest
+          image: ghcr.io/sakeeb91/scribemed/transcription-service:latest
           ports:
             - containerPort: 8080
               name: http
@@ -71,4 +71,3 @@ spec:
       name: http
   selector:
     app: transcription-service
-

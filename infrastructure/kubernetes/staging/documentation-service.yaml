@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
         - name: documentation-service
-          image: scribemed/documentation-service:latest
+          image: ghcr.io/sakeeb91/scribemed/documentation-service:latest
           ports:
             - containerPort: 8081
               name: http
@@ -88,4 +88,3 @@ spec:
       name: http
   selector:
     app: documentation-service
-
