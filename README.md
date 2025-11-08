@@ -25,6 +25,7 @@ ScribeMed is a comprehensive healthcare documentation platform that leverages AI
 - **Real-time Audio Transcription** - High-accuracy speech-to-text for clinical encounters
 - **Intelligent Documentation** - AI-powered clinical note generation
 - **Automated Coding** - ICD-10 and CPT code suggestions
+- **Authentication & Authorization** - Secure login with MFA, refresh sessions, and RBAC
 - **RAG-Powered Retrieval** - Context-aware information retrieval
 - **FHIR Integration** - Standards-compliant healthcare data exchange
 - **Agent Orchestration** - Coordinated multi-service workflows
@@ -86,6 +87,21 @@ pnpm run dev
 | `pnpm db:seed:dev`      | Seed development database                  |
 | `pnpm clean`            | Clean all build artifacts and node_modules |
 
+#### Authentication Service
+
+```
+pnpm --filter @scribemed/auth-service dev     # run the REST API locally
+pnpm --filter @scribemed/auth-service test    # execute auth service tests
+```
+
+Required environment variables for local execution:
+
+- `AUTH_SERVICE_PORT`
+- `JWT_ACCESS_TOKEN_SECRET` / `JWT_REFRESH_TOKEN_SECRET`
+- `SESSION_TTL_HOURS`
+- `PASSWORD_RESET_TOKEN_TTL_MINUTES`
+- `MFA_ISSUER`
+
 ---
 
 ## Project Structure
@@ -99,6 +115,7 @@ scribemed/
 │   └── api-gateway/            # API gateway service
 │
 ├── services/                   # Backend microservices
+│   ├── auth/                   # Authentication & authorization service
 │   ├── transcription/          # Audio transcription service
 │   ├── documentation/          # Clinical note generation
 │   ├── coding/                 # Medical coding service
