@@ -4,9 +4,10 @@ import { AddressInfo } from 'node:net';
 import test from 'node:test';
 
 import { createApp } from '../src/app';
+import { loadConfig } from '../src/config/env';
 
 test('health endpoint reports ready status', async (t) => {
-  const app = createApp();
+  const app = createApp(loadConfig({ env: 'test', port: 0 }));
   const server = createServer(app);
   await new Promise((resolve) => server.listen(0, resolve));
   t.after(() => server.close());

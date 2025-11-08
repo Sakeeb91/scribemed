@@ -3,14 +3,14 @@ import { createServer } from 'http';
 import { logger } from '@scribemed/logging';
 
 import { createApp } from './app';
+import { loadConfig } from './config/env';
 
-const PORT = Number(process.env.PORT ?? 8085);
-
-const app = createApp();
+const config = loadConfig();
+const app = createApp(config);
 const server = createServer(app);
 
-server.listen(PORT, () => {
-  logger.info('Auth service listening', { port: PORT });
+server.listen(config.port, () => {
+  logger.info('Auth service listening', { port: config.port, env: config.env });
 });
 
 process.on('SIGTERM', () => {
