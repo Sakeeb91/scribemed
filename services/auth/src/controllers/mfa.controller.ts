@@ -1,23 +1,18 @@
-import { Router, Request } from 'express';
+import { RequestHandler, Router } from 'express';
 import { z } from 'zod';
 
 import { AuthService } from '../services/auth.service';
+import type { AuthenticatedRequest } from '../types/express';
 
-type AuthenticatedRequest = Request & {
-  user?: {
-    id: string;
-  };
-};
-
-export function createMfaController(authService: AuthService): Router {
+export function createMfaController(
+  authService: AuthService,
+  authenticate: RequestHandler
+): Router {
   const router = Router();
+  router.use(authenticate);
 
   router.post('/setup', async (req: AuthenticatedRequest, res, next) => {
     try {
-      if (!req.user) {
-        res.status(401).json({ error: 'Not authenticated' });
-        return;
-      }
       const setup = await authService.initMfa(req.user.id);
       res.json(setup);
     } catch (error) {
@@ -31,10 +26,6 @@ export function createMfaController(authService: AuthService): Router {
 
   router.post('/verify', async (req: AuthenticatedRequest, res, next) => {
     try {
-      if (!req.user) {
-        res.status(401).json({ error: 'Not authenticated' });
-        return;
-      }
       const body = verifySchema.parse(req.body);
       await authService.verifyMfa(req.user.id, body.code);
       res.status(204).end();
@@ -45,10 +36,6 @@ export function createMfaController(authService: AuthService): Router {
 
   router.delete('/disable', async (req: AuthenticatedRequest, res, next) => {
     try {
-      if (!req.user) {
-        res.status(401).json({ error: 'Not authenticated' });
-        return;
-      }
       await authService.disableMfa(req.user.id);
       res.status(204).end();
     } catch (error) {

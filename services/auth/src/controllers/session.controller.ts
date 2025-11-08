@@ -1,23 +1,21 @@
-import { Router, Request } from 'express';
+import { RequestHandler, Router } from 'express';
 import { z } from 'zod';
 
 import { AuthService } from '../services/auth.service';
+import type { AuthenticatedRequest } from '../types/express';
 
-type AuthenticatedRequest = Request & {
-  user?: {
-    id: string;
-  };
-};
-
-export function createSessionController(authService: AuthService): Router {
+export function createSessionController(
+  authService: AuthService,
+  authenticate: RequestHandler,
+  authorize: (roles: string[]) => RequestHandler
+): Router {
   const router = Router();
+  router.use(authenticate);
 
-  router.get('/', async (req: AuthenticatedRequest, res, next) => {
+  const privilegedRoles = ['admin', 'physician', 'nurse_practitioner'];
+
+  router.get('/', authorize(privilegedRoles), async (req: AuthenticatedRequest, res, next) => {
     try {
-      if (!req.user) {
-        res.status(401).json({ error: 'Not authenticated' });
-        return;
-      }
       const sessions = await authService.listSessions(req.user.id);
       res.json({ sessions });
     } catch (error) {
@@ -29,19 +27,19 @@ export function createSessionController(authService: AuthService): Router {
     sessionId: z.string().uuid(),
   });
 
-  router.delete('/:sessionId', async (req: AuthenticatedRequest, res, next) => {
-    try {
-      if (!req.user) {
-        res.status(401).json({ error: 'Not authenticated' });
-        return;
+  router.delete(
+    '/:sessionId',
+    authorize(privilegedRoles),
+    async (req: AuthenticatedRequest, res, next) => {
+      try {
+        const params = revokeSchema.parse({ sessionId: req.params.sessionId });
+        await authService.revokeSession(req.user.id, params.sessionId);
+        res.status(204).end();
+      } catch (error) {
+        next(error);
       }
-      const params = revokeSchema.parse({ sessionId: req.params.sessionId });
-      await authService.revokeSession(req.user.id, params.sessionId);
-      res.status(204).end();
-    } catch (error) {
-      next(error);
     }
-  });
+  );
 
   return router;
 }

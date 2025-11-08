@@ -1,17 +1,14 @@
-import { Router, Request } from 'express';
+import { RequestHandler, Router } from 'express';
 import { z } from 'zod';
 
 import { AuthService } from '../services/auth.service';
+import type { AuthenticatedRequest } from '../types/express';
 import { buildRequestContext } from '../utils/request-context.util';
 
-type AuthenticatedRequest = Request & {
-  user?: {
-    id: string;
-    sessionId: string;
-  };
-};
-
-export function createAuthController(authService: AuthService): Router {
+export function createAuthController(
+  authService: AuthService,
+  authenticate: RequestHandler
+): Router {
   const router = Router();
 
   const registerSchema = z.object({
@@ -73,12 +70,8 @@ export function createAuthController(authService: AuthService): Router {
     }
   });
 
-  router.post('/logout', async (req: AuthenticatedRequest, res, next) => {
+  router.post('/logout', authenticate, async (req: AuthenticatedRequest, res, next) => {
     try {
-      if (!req.user) {
-        res.status(401).json({ error: 'Not authenticated' });
-        return;
-      }
       await authService.logout(req.user.sessionId, req.user.id);
       res.status(204).end();
     } catch (error) {
