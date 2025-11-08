@@ -53,6 +53,12 @@ Currently, services lack standardized health check endpoints. This makes it diff
 - **Readiness**: Indicates if the service is ready to accept traffic (checks dependencies like DB)
 - **Health**: Comprehensive health status including dependencies
 
+### Runtime Behavior
+
+- Services with external dependencies keep `/health/ready` in a failing state until critical checks pass. For example, the documentation service now surfaces an `unhealthy` status (503) whenever the PostgreSQL pool cannot be established, preventing Kubernetes from routing traffic prematurely.
+- Dependency initialization is retried automatically. The retry cadence is controlled via the optional `DATABASE_RETRY_DELAY_MS` environment variable (defaults to 5000ms).
+- Comprehensive `/health` responses always include dependency check details, even when readiness is blocked, to aid debugging and alerting.
+
 ### Response Format
 
 ```json
