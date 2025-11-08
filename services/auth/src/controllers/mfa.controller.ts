@@ -11,9 +11,10 @@ export function createMfaController(
   const router = Router();
   router.use(authenticate);
 
-  router.post('/setup', async (req: AuthenticatedRequest, res, next) => {
+  router.post('/setup', async (req, res, next) => {
     try {
-      const setup = await authService.initMfa(req.user.id);
+      const { user } = req as AuthenticatedRequest;
+      const setup = await authService.initMfa(user.id);
       res.json(setup);
     } catch (error) {
       next(error);
@@ -24,19 +25,21 @@ export function createMfaController(
     code: z.string().min(6),
   });
 
-  router.post('/verify', async (req: AuthenticatedRequest, res, next) => {
+  router.post('/verify', async (req, res, next) => {
     try {
       const body = verifySchema.parse(req.body);
-      await authService.verifyMfa(req.user.id, body.code);
+      const { user } = req as AuthenticatedRequest;
+      await authService.verifyMfa(user.id, body.code);
       res.status(204).end();
     } catch (error) {
       next(error);
     }
   });
 
-  router.delete('/disable', async (req: AuthenticatedRequest, res, next) => {
+  router.delete('/disable', async (req, res, next) => {
     try {
-      await authService.disableMfa(req.user.id);
+      const { user } = req as AuthenticatedRequest;
+      await authService.disableMfa(user.id);
       res.status(204).end();
     } catch (error) {
       next(error);

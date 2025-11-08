@@ -1,4 +1,5 @@
-import jwt, { JwtPayload } from 'jsonwebtoken';
+import { sign, verify, JwtPayload, Secret } from 'jsonwebtoken';
+import type { SignOptions, VerifyOptions } from 'jsonwebtoken';
 
 import { AppConfig } from '../config/env';
 
@@ -23,28 +24,40 @@ export class JWTService {
   constructor(private readonly config: AppConfig) {}
 
   generateAccessToken(payload: AccessTokenPayload): string {
-    return jwt.sign(payload, this.config.jwt.accessTokenSecret, {
-      expiresIn: this.config.jwt.accessTokenTtl,
+    const options: SignOptions = {
+      expiresIn: this.config.jwt.accessTokenTtl as SignOptions['expiresIn'],
       algorithm: 'HS256',
-    });
+    };
+    return sign(payload, this.config.jwt.accessTokenSecret as Secret, options);
   }
 
   verifyAccessToken(token: string): AccessTokenPayload {
-    return jwt.verify(token, this.config.jwt.accessTokenSecret, {
+    const options: VerifyOptions = {
       algorithms: ['HS256'],
-    }) as AccessTokenPayload;
+    };
+    return verify(
+      token,
+      this.config.jwt.accessTokenSecret as Secret,
+      options
+    ) as AccessTokenPayload;
   }
 
   generateRefreshToken(payload: RefreshTokenPayload): string {
-    return jwt.sign(payload, this.config.jwt.refreshTokenSecret, {
-      expiresIn: this.config.jwt.refreshTokenTtl,
+    const options: SignOptions = {
+      expiresIn: this.config.jwt.refreshTokenTtl as SignOptions['expiresIn'],
       algorithm: 'HS256',
-    });
+    };
+    return sign(payload, this.config.jwt.refreshTokenSecret as Secret, options);
   }
 
   verifyRefreshToken(token: string): RefreshTokenPayload {
-    return jwt.verify(token, this.config.jwt.refreshTokenSecret, {
+    const options: VerifyOptions = {
       algorithms: ['HS256'],
-    }) as RefreshTokenPayload;
+    };
+    return verify(
+      token,
+      this.config.jwt.refreshTokenSecret as Secret,
+      options
+    ) as RefreshTokenPayload;
   }
 }

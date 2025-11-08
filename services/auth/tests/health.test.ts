@@ -7,9 +7,9 @@ import { createApp } from '../src/app';
 import { loadConfig } from '../src/config/env';
 
 test('health endpoint reports ready status', async (t) => {
-  const app = createApp(loadConfig({ env: 'test', port: 0 }));
+  const app = createApp(loadConfig({ env: 'test', port: 1 }));
   const server = createServer(app);
-  await new Promise((resolve) => server.listen(0, resolve));
+  await new Promise<void>((resolve) => server.listen(0, () => resolve()));
   t.after(() => server.close());
 
   const { port } = server.address() as AddressInfo;

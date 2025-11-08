@@ -70,9 +70,10 @@ export function createAuthController(
     }
   });
 
-  router.post('/logout', authenticate, async (req: AuthenticatedRequest, res, next) => {
+  router.post('/logout', authenticate, async (req, res, next) => {
     try {
-      await authService.logout(req.user.sessionId, req.user.id);
+      const { user } = req as AuthenticatedRequest;
+      await authService.logout(user.sessionId, user.id);
       res.status(204).end();
     } catch (error) {
       next(error);

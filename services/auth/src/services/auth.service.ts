@@ -4,11 +4,15 @@ import { getDatabase } from '@scribemed/database';
 import { logger } from '@scribemed/logging';
 
 import { AppConfig } from '../config/env';
-import { mapPasswordResetToken } from '../models/password-reset-token.model';
+import {
+  mapPasswordResetToken,
+  PasswordResetTokenRecord,
+} from '../models/password-reset-token.model';
 import { Session } from '../models/session.model';
 import {
   defaultSecurityState,
   mapSecurityRecord,
+  UserSecurityRecord,
   UserSecurityState,
 } from '../models/user-security.model';
 import { hashToken } from '../utils/crypto.util';
@@ -338,7 +342,7 @@ export class AuthService {
   async resetPassword(input: ResetPasswordInput): Promise<void> {
     const db = await getDatabase();
     const hashedToken = hashToken(input.token);
-    const result = await db.query(
+    const result = await db.query<PasswordResetTokenRecord>(
       `SELECT * FROM password_reset_tokens
        WHERE token_hash = $1`,
       [hashedToken]
@@ -467,23 +471,28 @@ export class AuthService {
 
   private async getUserByEmail(email: string): Promise<DbUser | null> {
     const db = await getDatabase();
-    const result = await db.query(`SELECT * FROM users WHERE email = $1 AND deleted_at IS NULL`, [
-      email,
-    ]);
+    const result = await db.query<DbUser>(
+      `SELECT * FROM users WHERE email = $1 AND deleted_at IS NULL`,
+      [email]
+    );
     return result.rows[0] ?? null;
   }
 
   private async getUserById(userId: string): Promise<DbUser | null> {
     const db = await getDatabase();
-    const result = await db.query(`SELECT * FROM users WHERE id = $1 AND deleted_at IS NULL`, [
-      userId,
-    ]);
+    const result = await db.query<DbUser>(
+      `SELECT * FROM users WHERE id = $1 AND deleted_at IS NULL`,
+      [userId]
+    );
     return result.rows[0] ?? null;
   }
 
   private async getSecurityState(userId: string): Promise<UserSecurityState> {
     const db = await getDatabase();
-    const result = await db.query(`SELECT * FROM user_security WHERE user_id = $1`, [userId]);
+    const result = await db.query<UserSecurityRecord>(
+      `SELECT * FROM user_security WHERE user_id = $1`,
+      [userId]
+    );
     if (result.rows.length === 0) {
       return defaultSecurityState(userId);
     }

@@ -2,7 +2,7 @@ import { getDatabase } from '@scribemed/database';
 import { logger } from '@scribemed/logging';
 
 import { AppConfig } from '../config/env';
-import { mapSessionRecord, Session } from '../models/session.model';
+import { mapSessionRecord, Session, SessionRecord } from '../models/session.model';
 import { hashToken } from '../utils/crypto.util';
 
 export interface SessionMetadata {
@@ -27,7 +27,7 @@ export class SessionService {
     const db = await getDatabase();
     const expiresAt = new Date(Date.now() + this.config.sessionTtlHours * 60 * 60 * 1000);
 
-    const result = await db.query(
+    const result = await db.query<SessionRecord>(
       `INSERT INTO sessions (session_id, user_id, refresh_token, ip_address, user_agent, expires_at)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
@@ -52,7 +52,7 @@ export class SessionService {
     const db = await getDatabase();
     const expiresAt = new Date(Date.now() + this.config.sessionTtlHours * 60 * 60 * 1000);
 
-    const result = await db.query(
+    const result = await db.query<SessionRecord>(
       `UPDATE sessions
        SET refresh_token = $2,
            ip_address = COALESCE($3, ip_address),
@@ -87,7 +87,7 @@ export class SessionService {
 
   async getUserSessions(userId: string): Promise<Session[]> {
     const db = await getDatabase();
-    const result = await db.query(
+    const result = await db.query<SessionRecord>(
       `SELECT * FROM sessions
        WHERE user_id = $1
        ORDER BY created_at DESC
@@ -100,7 +100,7 @@ export class SessionService {
 
   async validateRefreshToken(sessionId: string, refreshToken: string): Promise<Session | null> {
     const db = await getDatabase();
-    const result = await db.query(
+    const result = await db.query<SessionRecord>(
       `SELECT * FROM sessions
        WHERE session_id = $1
          AND refresh_token = $2

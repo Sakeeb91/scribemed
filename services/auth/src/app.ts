@@ -1,6 +1,6 @@
 import { logger } from '@scribemed/logging';
 import cors from 'cors';
-import express, { Application, Request, Response, json } from 'express';
+import express, { Application, NextFunction, Request, Response, json } from 'express';
 import helmet from 'helmet';
 
 import { AppConfig } from './config/env';
@@ -43,7 +43,7 @@ export function createApp(config: AppConfig): Application {
     res.status(404).json({ error: 'Not Found' });
   });
 
-  app.use((error: Error, _req: Request, res: Response, _next) => {
+  app.use((error: Error, _req: Request, res: Response, _next: NextFunction) => {
     logger.error('Auth service error', { error });
     res.status(500).json({ error: error.message ?? 'Internal server error' });
   });

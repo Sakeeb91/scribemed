@@ -14,9 +14,10 @@ export function createSessionController(
 
   const privilegedRoles = ['admin', 'physician', 'nurse_practitioner'];
 
-  router.get('/', authorize(privilegedRoles), async (req: AuthenticatedRequest, res, next) => {
+  router.get('/', authorize(privilegedRoles), async (req, res, next) => {
     try {
-      const sessions = await authService.listSessions(req.user.id);
+      const { user } = req as AuthenticatedRequest;
+      const sessions = await authService.listSessions(user.id);
       res.json({ sessions });
     } catch (error) {
       next(error);
@@ -27,19 +28,16 @@ export function createSessionController(
     sessionId: z.string().uuid(),
   });
 
-  router.delete(
-    '/:sessionId',
-    authorize(privilegedRoles),
-    async (req: AuthenticatedRequest, res, next) => {
-      try {
-        const params = revokeSchema.parse({ sessionId: req.params.sessionId });
-        await authService.revokeSession(req.user.id, params.sessionId);
-        res.status(204).end();
-      } catch (error) {
-        next(error);
-      }
+  router.delete('/:sessionId', authorize(privilegedRoles), async (req, res, next) => {
+    try {
+      const params = revokeSchema.parse({ sessionId: req.params.sessionId });
+      const { user } = req as AuthenticatedRequest;
+      await authService.revokeSession(user.id, params.sessionId);
+      res.status(204).end();
+    } catch (error) {
+      next(error);
     }
-  );
+  });
 
   return router;
 }
