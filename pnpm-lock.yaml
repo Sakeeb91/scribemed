@@ -84,6 +84,25 @@ importers:
         specifier: ^5.2.0
         version: 5.9.3
 
+  packages/health:
+    dependencies:
+      '@scribemed/database':
+        specifier: workspace:*
+        version: link:../database
+      '@scribemed/logging':
+        specifier: workspace:*
+        version: link:../logging
+    devDependencies:
+      '@types/node':
+        specifier: ^20.11.30
+        version: 20.19.24
+      rimraf:
+        specifier: ^6.0.1
+        version: 6.1.0
+      typescript:
+        specifier: ^5.2.0
+        version: 5.9.3
+
   packages/logging:
     devDependencies:
       '@types/node':
@@ -162,11 +181,26 @@ importers:
         specifier: ^5.2.0
         version: 5.9.3
 
-  services/coding: {}
+  services/coding:
+    dependencies:
+      '@scribemed/health':
+        specifier: workspace:*
+        version: link:../../packages/health
 
-  services/documentation: {}
+  services/documentation:
+    dependencies:
+      '@scribemed/database':
+        specifier: workspace:*
+        version: link:../../packages/database
+      '@scribemed/health':
+        specifier: workspace:*
+        version: link:../../packages/health
 
-  services/transcription: {}
+  services/transcription:
+    dependencies:
+      '@scribemed/health':
+        specifier: workspace:*
+        version: link:../../packages/health
 
 packages:
 
