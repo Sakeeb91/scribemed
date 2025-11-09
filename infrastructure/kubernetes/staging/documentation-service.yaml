@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: documentation-service
+  namespace: staging
+  labels:
+    app: documentation-service
+    app.kubernetes.io/name: scribemed
+    app.kubernetes.io/environment: staging
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: documentation-service
+  template:
+    metadata:
+      labels:
+        app: documentation-service
+        app.kubernetes.io/name: scribemed
+        app.kubernetes.io/environment: staging
+    spec:
+      containers:
+        - name: documentation-service
+          image: ghcr.io/sakeeb91/scribemed/documentation-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8081
+              name: http
+          env:
+            - name: PORT
+              value: '8081'
+            - name: ENVIRONMENT
+              value: staging
+            - name: DB_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: database-credentials
+                  key: host
+            - name: DB_PORT
+              value: '5432'
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: database-credentials
+                  key: database
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: database-credentials
+                  key: user
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              memory: '256Mi'
+              cpu: '100m'
+            limits:
+              memory: '512Mi'
+              cpu: '500m'
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: documentation-service
+  namespace: staging
+  labels:
+    app: documentation-service
+    app.kubernetes.io/name: scribemed
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app: documentation-service

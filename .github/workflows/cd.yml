@@ -59,7 +59,8 @@ jobs:
       - name: Run environment smoke checks
         run: ${{ steps.kubeconfig.outputs.health_script }}
       - name: Notify Slack
-        if: secrets.SLACK_WEBHOOK != ''
+        if: always()
+        continue-on-error: true
         uses: slackapi/slack-github-action@v1.25.0
         with:
           payload: |

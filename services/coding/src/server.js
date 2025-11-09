@@ -2,6 +2,12 @@
 
 const http = require('node:http');
 
+const {
+  createLivenessHandler,
+  createReadinessHandler,
+  createHealthHandler,
+} = require('@scribemed/health');
+
 const PORT = Number(process.env.PORT ?? 8082);
 
 const CATALOG = [
@@ -10,11 +16,41 @@ const CATALOG = [
   { code: 'I10', description: 'Essential (primary) hypertension' },
 ];
 
+// Initialize health check handlers
+const livenessHandler = createLivenessHandler('coding');
+const readinessHandler = createReadinessHandler({
+  serviceName: 'coding',
+  checks: {},
+});
+const healthHandler = createHealthHandler({
+  serviceName: 'coding',
+  checks: {},
+});
+
 function createServer() {
-  return http.createServer((request, response) => {
+  return http.createServer(async (request, response) => {
+    // Health check endpoints
+    if (request.url === '/health/live') {
+      const health = livenessHandler();
+      const statusCode = health.status === 'healthy' ? 200 : 503;
+      response.writeHead(statusCode, { 'Content-Type': 'application/json' });
+      response.end(JSON.stringify(health));
+      return;
+    }
+
+    if (request.url === '/health/ready') {
+      const health = await readinessHandler();
+      const statusCode = health.status === 'healthy' ? 200 : 503;
+      response.writeHead(statusCode, { 'Content-Type': 'application/json' });
+      response.end(JSON.stringify(health));
+      return;
+    }
+
     if (request.url === '/health') {
-      response.writeHead(200, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ status: 'ok', service: 'coding' }));
+      const health = await healthHandler();
+      const statusCode = health.status === 'healthy' ? 200 : 503;
+      response.writeHead(statusCode, { 'Content-Type': 'application/json' });
+      response.end(JSON.stringify(health));
       return;
     }
 

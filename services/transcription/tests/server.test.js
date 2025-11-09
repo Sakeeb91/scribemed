@@ -20,6 +20,30 @@ test('health endpoint responds with transcription status', async (t) => {
   assert.equal(response.status, 200);
   const payload = await response.json();
   assert.equal(payload.service, 'transcription');
+  assert(payload.status);
+  assert(payload.timestamp);
+});
+
+test('GET /health/live returns liveness status', async (t) => {
+  const { server, url } = await startServer();
+  t.after(() => server.close());
+
+  const response = await fetch(`${url}/health/live`);
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.service, 'transcription');
+  assert.equal(payload.status, 'healthy');
+});
+
+test('GET /health/ready returns readiness status', async (t) => {
+  const { server, url } = await startServer();
+  t.after(() => server.close());
+
+  const response = await fetch(`${url}/health/ready`);
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.service, 'transcription');
+  assert(payload.status);
 });
 
 test('POST /transcriptions acknowledges payload', async (t) => {
