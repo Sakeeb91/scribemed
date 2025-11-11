@@ -254,6 +254,62 @@ test('health handler logs execution errors', async () => {
   assert(executionLog);
 });
 
+test('circuit breaker opens after repeated failures', async () => {
+  let attempts = 0;
+  const handler = createHealthHandler({
+    serviceName: 'test-service',
+    cache: { enabled: false },
+    checks: {
+      flaky: {
+        run: async () => {
+          attempts += 1;
+          throw new Error('boom');
+        },
+        circuitBreaker: {
+          failureThreshold: 2,
+          cooldownPeriodMs: 1000,
+          openStatus: 'unhealthy',
+        },
+      },
+    },
+  });
+
+  await handler().catch(() => {});
+  await handler().catch(() => {});
+  const bypassed = await handler();
+  assert.equal(attempts, 2);
+  assert.equal(bypassed.checks.flaky.circuitBreakerState, 'open');
+});
+
+test('circuit breaker recovers after cooldown', async () => {
+  let shouldFail = true;
+  const handler = createHealthHandler({
+    serviceName: 'test-service',
+    cache: { enabled: false },
+    checks: {
+      flaky: {
+        run: async () => {
+          if (shouldFail) {
+            shouldFail = false;
+            throw new Error('boom');
+          }
+          return { status: 'healthy' };
+        },
+        circuitBreaker: {
+          failureThreshold: 1,
+          successThreshold: 1,
+          cooldownPeriodMs: 120,
+        },
+      },
+    },
+  });
+
+  await handler().catch(() => {});
+  await sleep(150);
+  const result = await handler();
+  assert.equal(result.checks.flaky.status, 'healthy');
+});
+
 test('health handler records metrics via collector', async () => {
   const collector = createMockCollector();
   const handler = createHealthHandler({

@@ -5,6 +5,7 @@ import { logger as defaultLogger } from '@scribemed/logging';
  * Health check status types
  */
 export type HealthStatus = 'healthy' | 'degraded' | 'unhealthy';
+type CircuitBreakerState = 'closed' | 'open' | 'half-open';
 
 /**
  * Individual check result
@@ -14,6 +15,8 @@ export interface CheckResult {
   message?: string;
   responseTime?: number;
   timedOut?: boolean;
+  circuitBreakerState?: CircuitBreakerState;
+  retryAfterMs?: number;
   [key: string]: unknown;
 }
 
@@ -36,6 +39,11 @@ const DEFAULT_MEMORY_DEGRADED_PERCENT = 90;
 const DEFAULT_MEMORY_UNHEALTHY_PERCENT = 95;
 const DEFAULT_CHECK_TIMEOUT_MS = 2000;
 const DEFAULT_CACHE_TTL_MS = 2000;
+const DEFAULT_BREAKER_FAILURE_THRESHOLD = 3;
+const DEFAULT_BREAKER_SUCCESS_THRESHOLD = 2;
+const DEFAULT_BREAKER_COOLDOWN_MS = 10000;
+const DEFAULT_BREAKER_OPEN_STATUS: HealthStatus = 'degraded';
+const DEFAULT_BREAKER_HALF_OPEN_STATUS: HealthStatus = 'degraded';
 const HEALTH_STATUS_VALUES: Record<HealthStatus, number> = {
   healthy: 0,
   degraded: 1,
@@ -393,6 +401,20 @@ function resolveCacheTtl(cacheOptions?: CacheOptions): number {
   return DEFAULT_CACHE_TTL_MS;
 }
 
+function updateCircuitBreakerState(
+  breaker: CircuitBreaker,
+  result: CheckResult
+): CircuitBreakerEvent | null {
+  if (isSuccessfulResult(result)) {
+    return breaker.recordSuccess();
+  }
+  return breaker.recordFailure();
+}
+
+function isSuccessfulResult(result: CheckResult): boolean {
+  return result.status === 'healthy' && !result.timedOut;
+}
+
 function logCheckOutcome(
   loggerInstance: Logger,
   serviceName: string,
@@ -411,6 +433,7 @@ function logCheckOutcome(
     responseTime: result.responseTime,
     impact: check.impact,
     message: result.message,
+    circuitBreakerState: result.circuitBreakerState,
   };
 
   if (result.status === 'unhealthy') {
@@ -469,6 +492,32 @@ function serializeError(error: unknown) {
 
 export function getHealthMetricsSnapshot(): string {
   return defaultMetricsCollector.toPrometheus();
+}
+
+function logCircuitBreakerBypass(
+  loggerInstance: Logger,
+  serviceName: string,
+  check: NormalizedCheck
+) {
+  loggerInstance.warn('Circuit breaker bypassed health check', {
+    service: serviceName,
+    check: check.name,
+    circuitBreakerState: check.breaker?.getState(),
+  });
+}
+
+function logCircuitBreakerEvent(
+  loggerInstance: Logger,
+  serviceName: string,
+  checkName: string,
+  event: CircuitBreakerEvent
+) {
+  const context = { service: serviceName, check: checkName };
+  if (event === 'opened') {
+    loggerInstance.error('Circuit breaker opened', context);
+    return;
+  }
+  loggerInstance.info('Circuit breaker closed', context);
 }
 
 function recordCheckMetrics(
@@ -606,19 +655,146 @@ function createHistogramState(): HistogramState {
 }
 
 const defaultMetricsCollector = new SimpleHealthMetricsCollector();
+type CircuitBreakerEvent = 'opened' | 'closed';
+
+class CircuitBreaker {
+  private state: CircuitBreakerState = 'closed';
+  private failureCount = 0;
+  private successCount = 0;
+  private openedAt = 0;
+  private readonly config: CircuitBreakerRuntimeConfig;
+
+  constructor(
+    private readonly name: string,
+    options: CircuitBreakerOptions
+  ) {
+    this.config = resolveCircuitBreakerConfig(options);
+  }
+
+  canExecute(): boolean {
+    if (this.state === 'open') {
+      const elapsed = Date.now() - this.openedAt;
+      if (elapsed >= this.config.cooldownPeriodMs) {
+        this.state = 'half-open';
+        this.successCount = 0;
+        return true;
+      }
+      return false;
+    }
+    return true;
+  }
+
+  recordSuccess(): CircuitBreakerEvent | null {
+    if (this.state === 'half-open') {
+      this.successCount += 1;
+      if (this.successCount >= this.config.successThreshold) {
+        this.reset();
+        return 'closed';
+      }
+      return null;
+    }
+
+    this.failureCount = 0;
+    return null;
+  }
+
+  recordFailure(): CircuitBreakerEvent | null {
+    if (this.state === 'half-open') {
+      this.trip();
+      return 'opened';
+    }
+
+    this.failureCount += 1;
+    if (this.failureCount >= this.config.failureThreshold) {
+      this.trip();
+      return 'opened';
+    }
+
+    return null;
+  }
+
+  getBypassResult(): CheckResult {
+    const retryAfterMs =
+      this.state === 'open'
+        ? Math.max(0, this.config.cooldownPeriodMs - (Date.now() - this.openedAt))
+        : 0;
+
+    const status = this.state === 'open' ? this.config.openStatus : this.config.halfOpenStatus;
+
+    return {
+      status,
+      message:
+        this.state === 'open'
+          ? `Circuit breaker open for "${this.name}"`
+          : `Circuit breaker half-open for "${this.name}"`,
+      circuitBreakerState: this.state,
+      retryAfterMs,
+    };
+  }
+
+  getState(): CircuitBreakerState {
+    return this.state;
+  }
+
+  private trip() {
+    this.state = 'open';
+    this.openedAt = Date.now();
+    this.failureCount = 0;
+    this.successCount = 0;
+  }
+
+  private reset() {
+    this.state = 'closed';
+    this.failureCount = 0;
+    this.successCount = 0;
+    this.openedAt = 0;
+  }
+}
+
+interface CircuitBreakerRuntimeConfig {
+  failureThreshold: number;
+  successThreshold: number;
+  cooldownPeriodMs: number;
+  openStatus: HealthStatus;
+  halfOpenStatus: HealthStatus;
+}
+
+function resolveCircuitBreakerConfig(options: CircuitBreakerOptions): CircuitBreakerRuntimeConfig {
+  const failureThreshold = Math.max(
+    1,
+    options.failureThreshold ?? DEFAULT_BREAKER_FAILURE_THRESHOLD
+  );
+  const successThreshold = Math.max(
+    1,
+    options.successThreshold ?? options.halfOpenSuccesses ?? DEFAULT_BREAKER_SUCCESS_THRESHOLD
+  );
+  const cooldownPeriodMs = Math.max(100, options.cooldownPeriodMs ?? DEFAULT_BREAKER_COOLDOWN_MS);
+  return {
+    failureThreshold,
+    successThreshold,
+    cooldownPeriodMs,
+    openStatus: options.openStatus ?? DEFAULT_BREAKER_OPEN_STATUS,
+    halfOpenStatus: options.halfOpenStatus ?? DEFAULT_BREAKER_HALF_OPEN_STATUS,
+  };
+}
 
 interface NormalizedCheck {
   name: string;
   fn: HealthCheckFunction;
   timeoutMs?: number;
   impact: HealthCheckImpact;
-  circuitBreaker?: CircuitBreakerOptions;
   tags?: string[];
+  breaker?: CircuitBreaker;
+}
+
+interface HealthCheckRuntimeState {
+  circuitBreakers: Map<string, CircuitBreaker>;
 }
 
 function normalizeCheckDefinition(
   name: string,
-  definition: HealthCheckDefinition
+  definition: HealthCheckDefinition,
+  breakerMap?: Map<string, CircuitBreaker>
 ): NormalizedCheck {
   if (!isHealthCheckConfig(definition)) {
     return {
@@ -633,13 +809,35 @@ function normalizeCheckDefinition(
     fn: definition.run,
     timeoutMs: definition.timeoutMs,
     impact: definition.impact ?? 'critical',
-    circuitBreaker: definition.circuitBreaker,
     tags: definition.tags,
+    breaker: resolveCircuitBreaker(name, definition.circuitBreaker, breakerMap),
   };
 }
 
 function isHealthCheckConfig(definition: HealthCheckDefinition): definition is HealthCheckConfig {
   return typeof definition === 'object' && definition !== null && 'run' in definition;
+}
+
+function resolveCircuitBreaker(
+  name: string,
+  options: CircuitBreakerOptions | undefined,
+  breakerMap?: Map<string, CircuitBreaker>
+): CircuitBreaker | undefined {
+  if (!options) {
+    return undefined;
+  }
+
+  if (breakerMap) {
+    const existing = breakerMap.get(name);
+    if (existing) {
+      return existing;
+    }
+    const breaker = new CircuitBreaker(name, options);
+    breakerMap.set(name, breaker);
+    return breaker;
+  }
+
+  return new CircuitBreaker(name, options);
 }
 
 /**
@@ -660,9 +858,13 @@ function determineOverallStatus(checkResults: Record<string, CheckResult>): Heal
 /**
  * Runs all health checks and returns a comprehensive health response
  */
-export async function runHealthChecks(options: HealthCheckOptions): Promise<HealthResponse> {
+export async function runHealthChecks(
+  options: HealthCheckOptions,
+  runtimeState?: HealthCheckRuntimeState
+): Promise<HealthResponse> {
   const checks: Record<string, HealthCheckDefinition> = { ...options.checks };
   const activeLogger = options.logger ?? defaultLogger;
+  const circuitBreakers = runtimeState?.circuitBreakers ?? new Map<string, CircuitBreaker>();
 
   // Add memory check if requested
   if (options.includeMemoryCheck !== false) {
@@ -671,7 +873,7 @@ export async function runHealthChecks(options: HealthCheckOptions): Promise<Heal
 
   // Run all checks
   const normalizedChecks = Object.entries(checks).map(([name, definition]) =>
-    normalizeCheckDefinition(name, definition)
+    normalizeCheckDefinition(name, definition, circuitBreakers)
   );
 
   const checkResults: Record<string, CheckResult> = {};
@@ -679,12 +881,29 @@ export async function runHealthChecks(options: HealthCheckOptions): Promise<Heal
     const timeoutMs = resolveTimeoutMs(check, options);
     const start = Date.now();
 
+    if (check.breaker && !check.breaker.canExecute()) {
+      const breakerResult = {
+        ...check.breaker.getBypassResult(),
+        responseTime: 0,
+      };
+      checkResults[check.name] = breakerResult;
+      recordCheckMetrics(options.metrics, options.serviceName, check, breakerResult);
+      logCircuitBreakerBypass(activeLogger, options.serviceName, check);
+      return;
+    }
+
     try {
       const result = await executeCheckWithTimeout(check, timeoutMs);
       const finalResult = withResponseTime(result, Date.now() - start);
       checkResults[check.name] = finalResult;
       recordCheckMetrics(options.metrics, options.serviceName, check, finalResult);
       logCheckOutcome(activeLogger, options.serviceName, check, finalResult);
+      const breakerEvent = check.breaker
+        ? updateCircuitBreakerState(check.breaker, finalResult)
+        : null;
+      if (breakerEvent) {
+        logCircuitBreakerEvent(activeLogger, options.serviceName, check.name, breakerEvent);
+      }
     } catch (error) {
       const failureResult: CheckResult = {
         status: 'unhealthy',
@@ -694,6 +913,12 @@ export async function runHealthChecks(options: HealthCheckOptions): Promise<Heal
       checkResults[check.name] = failureResult;
       recordCheckMetrics(options.metrics, options.serviceName, check, failureResult);
       logCheckExecutionError(activeLogger, options.serviceName, check, error);
+      const breakerEvent = check.breaker
+        ? updateCircuitBreakerState(check.breaker, failureResult)
+        : null;
+      if (breakerEvent) {
+        logCircuitBreakerEvent(activeLogger, options.serviceName, check.name, breakerEvent);
+      }
     }
   });
 
@@ -728,6 +953,7 @@ export function createLivenessHandler(serviceName: string) {
  * Creates a readiness check handler (checks dependencies)
  */
 export function createReadinessHandler(options: HealthCheckOptions) {
+  const circuitBreakers = new Map<string, CircuitBreaker>();
   const runner = async (): Promise<HealthResponse> => {
     // For readiness, we only check critical dependencies (not memory)
     const readinessChecks: Record<string, HealthCheckDefinition> = {};
@@ -744,11 +970,14 @@ export function createReadinessHandler(options: HealthCheckOptions) {
       }
     });
 
-    return runHealthChecks({
-      ...options,
-      checks: readinessChecks,
-      includeMemoryCheck: false,
-    });
+    return runHealthChecks(
+      {
+        ...options,
+        checks: readinessChecks,
+        includeMemoryCheck: false,
+      },
+      { circuitBreakers }
+    );
   };
 
   return createCachedHandler(runner, options.cache);
@@ -758,6 +987,7 @@ export function createReadinessHandler(options: HealthCheckOptions) {
  * Creates a comprehensive health check handler
  */
 export function createHealthHandler(options: HealthCheckOptions) {
-  const runner = (): Promise<HealthResponse> => runHealthChecks(options);
+  const circuitBreakers = new Map<string, CircuitBreaker>();
+  const runner = (): Promise<HealthResponse> => runHealthChecks(options, { circuitBreakers });
   return createCachedHandler(runner, options.cache);
 }
