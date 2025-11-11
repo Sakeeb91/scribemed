@@ -10,6 +10,7 @@ export interface CheckResult {
   status: HealthStatus;
   message?: string;
   responseTime?: number;
+  timedOut?: boolean;
   [key: string]: unknown;
 }
 
@@ -241,6 +242,73 @@ function resolveMemoryStatus(
   return heapUsagePercent > degradedThreshold ? 'degraded' : 'healthy';
 }
 
+function resolveTimeoutMs(check: NormalizedCheck, options: HealthCheckOptions): number | undefined {
+  const fromDefinition = normalizeTimeoutValue(check.timeoutMs);
+  if (typeof fromDefinition !== 'undefined') {
+    return fromDefinition;
+  }
+
+  const fromMap = normalizeTimeoutValue(options.timeouts?.perCheck?.[check.name]);
+  if (typeof fromMap !== 'undefined') {
+    return fromMap;
+  }
+
+  return normalizeTimeoutValue(options.timeouts?.defaultMs ?? DEFAULT_CHECK_TIMEOUT_MS);
+}
+
+function normalizeTimeoutValue(value?: number): number | undefined {
+  if (typeof value !== 'number' || Number.isNaN(value) || value <= 0) {
+    return undefined;
+  }
+  return value;
+}
+
+async function executeCheckWithTimeout(
+  check: NormalizedCheck,
+  timeoutMs?: number
+): Promise<CheckResult> {
+  if (!timeoutMs) {
+    return check.fn();
+  }
+
+  const timeoutToken = Symbol(`timeout:${check.name}`);
+  let timeoutHandle: NodeJS.Timeout | undefined;
+
+  const timeoutPromise = new Promise<typeof timeoutToken>((resolve) => {
+    timeoutHandle = setTimeout(() => resolve(timeoutToken), timeoutMs);
+    if (typeof timeoutHandle.unref === 'function') {
+      timeoutHandle.unref();
+    }
+  });
+
+  try {
+    const result = await Promise.race([Promise.resolve(check.fn()), timeoutPromise]);
+    if (result === timeoutToken) {
+      return {
+        status: 'unhealthy',
+        message: `Health check "${check.name}" timed out after ${timeoutMs}ms`,
+        timedOut: true,
+      };
+    }
+    return result as CheckResult;
+  } finally {
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+    }
+  }
+}
+
+function withResponseTime(result: CheckResult, durationMs: number): CheckResult {
+  if (typeof result.responseTime === 'number') {
+    return result;
+  }
+
+  return {
+    ...result,
+    responseTime: durationMs,
+  };
+}
+
 interface NormalizedCheck {
   name: string;
   fn: HealthCheckFunction;
@@ -309,13 +377,17 @@ export async function runHealthChecks(options: HealthCheckOptions): Promise<Heal
 
   const checkResults: Record<string, CheckResult> = {};
   const checkPromises = normalizedChecks.map(async (check) => {
+    const timeoutMs = resolveTimeoutMs(check, options);
+    const start = Date.now();
+
     try {
-      const result = await check.fn();
-      checkResults[check.name] = result;
+      const result = await executeCheckWithTimeout(check, timeoutMs);
+      checkResults[check.name] = withResponseTime(result, Date.now() - start);
     } catch (error) {
       checkResults[check.name] = {
         status: 'unhealthy',
         message: error instanceof Error ? error.message : 'Unknown error',
+        responseTime: Date.now() - start,
       };
     }
   });

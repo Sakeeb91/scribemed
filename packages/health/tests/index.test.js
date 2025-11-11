@@ -12,6 +12,8 @@ const {
   createHealthConfigFromEnv,
 } = require('../dist/index');
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 test('createLivenessHandler returns healthy status', () => {
   const handler = createLivenessHandler('test-service');
   const result = handler();
@@ -98,6 +100,45 @@ test('createHealthHandler accepts configuration objects', async () => {
   assert(result.checks);
   assert.equal(result.checks.cache.status, 'healthy');
   assert.equal(result.checks.cache.message, 'cache ok');
+});
+
+test('health handler enforces default timeouts', async () => {
+  const handler = createHealthHandler({
+    serviceName: 'test-service',
+    checks: {
+      slow: async () => {
+        await sleep(30);
+        return { status: 'healthy' };
+      },
+    },
+    timeouts: { defaultMs: 5 },
+  });
+
+  const result = await handler();
+  assert.equal(result.checks.slow.status, 'unhealthy');
+  assert.equal(result.checks.slow.timedOut, true);
+  assert(result.checks.slow.responseTime);
+});
+
+test('health handler honours per-check timeout overrides', async () => {
+  const handler = createHealthHandler({
+    serviceName: 'test-service',
+    checks: {
+      slow: {
+        run: async () => {
+          await sleep(15);
+          return { status: 'healthy', custom: true };
+        },
+        timeoutMs: 30,
+      },
+    },
+    timeouts: { defaultMs: 5 },
+  });
+
+  const result = await handler();
+  assert.equal(result.checks.slow.status, 'healthy');
+  assert.equal(result.checks.slow.custom, true);
+  assert(result.checks.slow.responseTime >= 15);
 });
 
 test('createDatabaseCheck returns unhealthy when database check fails', async () => {
