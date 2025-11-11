@@ -173,7 +173,10 @@ export function createDatabaseCheck(database: {
 /**
  * Creates a memory health check function
  */
-export function createMemoryCheck(): HealthCheckFunction {
+export function createMemoryCheck(thresholds?: MemoryThresholds): HealthCheckFunction {
+  const degradedThreshold = thresholds?.degradedPercent ?? DEFAULT_MEMORY_DEGRADED_PERCENT;
+  const unhealthyThreshold = thresholds?.unhealthyPercent ?? DEFAULT_MEMORY_UNHEALTHY_PERCENT;
+
   return (): CheckResult => {
     const usage = process.memoryUsage();
     const heapUsedMB = usage.heapUsed / 1024 / 1024;
@@ -181,9 +184,7 @@ export function createMemoryCheck(): HealthCheckFunction {
     const rssMB = usage.rss / 1024 / 1024;
     const heapUsagePercent = (usage.heapUsed / usage.heapTotal) * 100;
 
-    // Consider unhealthy if heap usage exceeds 95%, degraded if > 90%
-    const status: HealthStatus =
-      heapUsagePercent > 95 ? 'unhealthy' : heapUsagePercent > 90 ? 'degraded' : 'healthy';
+    const status = resolveMemoryStatus(heapUsagePercent, degradedThreshold, unhealthyThreshold);
 
     return {
       status,
@@ -191,8 +192,24 @@ export function createMemoryCheck(): HealthCheckFunction {
       heapTotalMB: Math.round(heapTotalMB * 100) / 100,
       rssMB: Math.round(rssMB * 100) / 100,
       heapUsagePercent: Math.round(heapUsagePercent * 100) / 100,
+      degradedThresholdPercent: degradedThreshold,
+      unhealthyThresholdPercent: unhealthyThreshold,
     };
   };
+}
+
+function resolveMemoryStatus(
+  heapUsagePercent: number,
+  degradedThreshold: number,
+  unhealthyThreshold: number
+): HealthStatus {
+  const safeUnhealthyThreshold = Math.max(unhealthyThreshold, degradedThreshold);
+
+  if (heapUsagePercent > safeUnhealthyThreshold) {
+    return 'unhealthy';
+  }
+
+  return heapUsagePercent > degradedThreshold ? 'degraded' : 'healthy';
 }
 
 /**
@@ -218,7 +235,7 @@ export async function runHealthChecks(options: HealthCheckOptions): Promise<Heal
 
   // Add memory check if requested
   if (options.includeMemoryCheck !== false) {
-    checks.memory = createMemoryCheck();
+    checks.memory = createMemoryCheck(options.memoryThresholds);
   }
 
   // Run all checks

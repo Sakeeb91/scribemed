@@ -30,6 +30,25 @@ test('createMemoryCheck returns memory usage information', () => {
   assert(typeof result.heapUsagePercent === 'number');
 });
 
+test('createMemoryCheck respects custom thresholds', () => {
+  const degradedCheck = createMemoryCheck({
+    degradedPercent: 0,
+    unhealthyPercent: 1000,
+  });
+  const degradedResult = degradedCheck();
+  assert.equal(degradedResult.status, 'degraded');
+  assert.equal(degradedResult.degradedThresholdPercent, 0);
+  assert.equal(degradedResult.unhealthyThresholdPercent, 1000);
+
+  const unhealthyCheck = createMemoryCheck({
+    degradedPercent: 0,
+    unhealthyPercent: 0.0001,
+  });
+  const unhealthyResult = unhealthyCheck();
+  assert.equal(unhealthyResult.status, 'unhealthy');
+  assert.equal(unhealthyResult.unhealthyThresholdPercent, 0.0001);
+});
+
 test('createReadinessHandler without checks returns healthy', async () => {
   const handler = createReadinessHandler({
     serviceName: 'test-service',
