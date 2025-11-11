@@ -36,6 +36,12 @@ const DEFAULT_MEMORY_DEGRADED_PERCENT = 90;
 const DEFAULT_MEMORY_UNHEALTHY_PERCENT = 95;
 const DEFAULT_CHECK_TIMEOUT_MS = 2000;
 const DEFAULT_CACHE_TTL_MS = 2000;
+const HEALTH_STATUS_VALUES: Record<HealthStatus, number> = {
+  healthy: 0,
+  degraded: 1,
+  unhealthy: 2,
+};
+const HEALTH_DURATION_BUCKETS = [1, 5, 10, 25, 50, 100, 250, 500, 1000, 2000, 5000];
 
 /**
  * Thresholds that determine when the memory check flips to degraded/unhealthy.
@@ -59,6 +65,18 @@ export interface TimeoutOptions {
 export interface CacheOptions {
   enabled?: boolean;
   ttlMs?: number;
+}
+
+export interface HealthMetricsCollector {
+  recordCheckStatus(service: string, check: string, status: HealthStatus): void;
+  recordCheckDuration(service: string, check: string, durationMs: number): void;
+  recordOverallStatus(service: string, status: HealthStatus): void;
+  toPrometheus(): string;
+}
+
+export interface HealthMetricsOptions {
+  enabled?: boolean;
+  collector?: HealthMetricsCollector;
 }
 
 /**
@@ -101,6 +119,7 @@ export interface HealthCheckOptions {
   timeouts?: TimeoutOptions;
   cache?: CacheOptions;
   logger?: Logger;
+  metrics?: HealthMetricsOptions;
 }
 
 /**
@@ -168,6 +187,7 @@ export function createHealthConfigFromEnv(
     timeouts,
     cache,
     logger: overrides.logger,
+    metrics: overrides.metrics,
   };
 }
 
@@ -447,6 +467,146 @@ function serializeError(error: unknown) {
   return { message: String(error) };
 }
 
+export function getHealthMetricsSnapshot(): string {
+  return defaultMetricsCollector.toPrometheus();
+}
+
+function recordCheckMetrics(
+  options: HealthMetricsOptions | undefined,
+  serviceName: string,
+  check: NormalizedCheck,
+  result: CheckResult
+) {
+  const collector = getMetricsCollector(options);
+  if (!collector) {
+    return;
+  }
+
+  collector.recordCheckStatus(serviceName, check.name, result.status);
+
+  if (typeof result.responseTime === 'number') {
+    collector.recordCheckDuration(serviceName, check.name, result.responseTime);
+  }
+}
+
+function recordOverallMetrics(options: HealthMetricsOptions | undefined, response: HealthResponse) {
+  const collector = getMetricsCollector(options);
+  if (!collector) {
+    return;
+  }
+
+  collector.recordOverallStatus(response.service, response.status);
+}
+
+function getMetricsCollector(options?: HealthMetricsOptions): HealthMetricsCollector | null {
+  if (options?.enabled === false) {
+    return null;
+  }
+
+  return options?.collector ?? defaultMetricsCollector;
+}
+
+interface HistogramBucketState {
+  le: number;
+  count: number;
+}
+
+interface HistogramState {
+  buckets: HistogramBucketState[];
+  count: number;
+  sum: number;
+}
+
+class SimpleHealthMetricsCollector implements HealthMetricsCollector {
+  private readonly statusMap = new Map<string, number>();
+  private readonly durationMap = new Map<string, HistogramState>();
+  private readonly overallStatusMap = new Map<string, number>();
+
+  recordCheckStatus(service: string, check: string, status: HealthStatus): void {
+    this.statusMap.set(this.buildKey(service, check), HEALTH_STATUS_VALUES[status] ?? 2);
+  }
+
+  recordCheckDuration(service: string, check: string, durationMs: number): void {
+    const key = this.buildKey(service, check);
+    const histogram = this.durationMap.get(key) ?? createHistogramState();
+    histogram.count += 1;
+    histogram.sum += durationMs;
+    histogram.buckets.forEach((bucket) => {
+      if (durationMs <= bucket.le) {
+        bucket.count += 1;
+      }
+    });
+    this.durationMap.set(key, histogram);
+  }
+
+  recordOverallStatus(service: string, status: HealthStatus): void {
+    this.overallStatusMap.set(service, HEALTH_STATUS_VALUES[status] ?? 2);
+  }
+
+  toPrometheus(): string {
+    const lines: string[] = [];
+    lines.push(
+      '# HELP scribemed_health_check_status Health check status (0 healthy, 1 degraded, 2 unhealthy)',
+      '# TYPE scribemed_health_check_status gauge'
+    );
+
+    for (const [key, value] of this.statusMap.entries()) {
+      const [service, check] = key.split('::');
+      lines.push(`scribemed_health_check_status{service="${service}",check="${check}"} ${value}`);
+    }
+
+    lines.push(
+      '# HELP scribemed_health_check_duration_ms Health check duration in milliseconds',
+      '# TYPE scribemed_health_check_duration_ms histogram'
+    );
+
+    for (const [key, histogram] of this.durationMap.entries()) {
+      const [service, check] = key.split('::');
+      let cumulative = 0;
+      histogram.buckets.forEach((bucket) => {
+        cumulative = bucket.count;
+        lines.push(
+          `scribemed_health_check_duration_ms_bucket{service="${service}",check="${check}",le="${bucket.le}"} ${cumulative}`
+        );
+      });
+      lines.push(
+        `scribemed_health_check_duration_ms_bucket{service="${service}",check="${check}",le="+Inf"} ${histogram.count}`
+      );
+      lines.push(
+        `scribemed_health_check_duration_ms_sum{service="${service}",check="${check}"} ${histogram.sum}`
+      );
+      lines.push(
+        `scribemed_health_check_duration_ms_count{service="${service}",check="${check}"} ${histogram.count}`
+      );
+    }
+
+    lines.push(
+      '# HELP scribemed_health_overall_status Overall service health status',
+      '# TYPE scribemed_health_overall_status gauge'
+    );
+
+    for (const [service, value] of this.overallStatusMap.entries()) {
+      lines.push(`scribemed_health_overall_status{service="${service}"} ${value}`);
+    }
+
+    return lines.join('\n');
+  }
+
+  private buildKey(service: string, check: string): string {
+    return `${service}::${check}`;
+  }
+}
+
+function createHistogramState(): HistogramState {
+  return {
+    buckets: HEALTH_DURATION_BUCKETS.map((le) => ({ le, count: 0 })),
+    count: 0,
+    sum: 0,
+  };
+}
+
+const defaultMetricsCollector = new SimpleHealthMetricsCollector();
+
 interface NormalizedCheck {
   name: string;
   fn: HealthCheckFunction;
@@ -523,6 +683,7 @@ export async function runHealthChecks(options: HealthCheckOptions): Promise<Heal
       const result = await executeCheckWithTimeout(check, timeoutMs);
       const finalResult = withResponseTime(result, Date.now() - start);
       checkResults[check.name] = finalResult;
+      recordCheckMetrics(options.metrics, options.serviceName, check, finalResult);
       logCheckOutcome(activeLogger, options.serviceName, check, finalResult);
     } catch (error) {
       const failureResult: CheckResult = {
@@ -531,6 +692,7 @@ export async function runHealthChecks(options: HealthCheckOptions): Promise<Heal
         responseTime: Date.now() - start,
       };
       checkResults[check.name] = failureResult;
+      recordCheckMetrics(options.metrics, options.serviceName, check, failureResult);
       logCheckExecutionError(activeLogger, options.serviceName, check, error);
     }
   });
@@ -547,6 +709,7 @@ export async function runHealthChecks(options: HealthCheckOptions): Promise<Heal
   };
 
   logOverallResult(activeLogger, response);
+  recordOverallMetrics(options.metrics, response);
   return response;
 }
 

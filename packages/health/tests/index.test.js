@@ -10,6 +10,7 @@ const {
   createMemoryCheck,
   createDatabaseCheck,
   createHealthConfigFromEnv,
+  getHealthMetricsSnapshot,
 } = require('../dist/index');
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -28,6 +29,19 @@ const createMockLogger = () => {
     warn: (message, context) => calls.warn.push({ message, context }),
     error: (message, context) => calls.error.push({ message, context }),
     calls,
+  };
+};
+
+const createMockCollector = () => {
+  const events = [];
+  return {
+    recordCheckStatus: (service, check, status) =>
+      events.push({ type: 'status', service, check, status }),
+    recordCheckDuration: (service, check, duration) =>
+      events.push({ type: 'duration', service, check, duration }),
+    recordOverallStatus: (service, status) => events.push({ type: 'overall', service, status }),
+    toPrometheus: () => '',
+    events,
   };
 };
 
@@ -238,6 +252,40 @@ test('health handler logs execution errors', async () => {
     (entry) => entry.message === 'Health check execution failed'
   );
   assert(executionLog);
+});
+
+test('health handler records metrics via collector', async () => {
+  const collector = createMockCollector();
+  const handler = createHealthHandler({
+    serviceName: 'test-service',
+    metrics: { collector },
+    cache: { enabled: false },
+    checks: {
+      metric: async () => {
+        await sleep(5);
+        return { status: 'degraded' };
+      },
+    },
+  });
+
+  await handler();
+  const statusEvent = collector.events.find(
+    (event) => event.type === 'status' && event.check === 'metric'
+  );
+  const durationEvent = collector.events.find(
+    (event) => event.type === 'duration' && event.check === 'metric'
+  );
+  const overallEvent = collector.events.find((event) => event.type === 'overall');
+  assert(statusEvent);
+  assert(durationEvent);
+  assert(overallEvent);
+  assert.equal(statusEvent.status, 'degraded');
+});
+
+test('getHealthMetricsSnapshot returns Prometheus text', () => {
+  const snapshot = getHealthMetricsSnapshot();
+  assert.equal(typeof snapshot, 'string');
+  assert(snapshot.includes('scribemed_health_check_status'));
 });
 
 test('createDatabaseCheck returns unhealthy when database check fails', async () => {
