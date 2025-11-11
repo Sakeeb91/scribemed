@@ -28,6 +28,35 @@ export interface HealthResponse {
  */
 export type HealthCheckFunction = () => Promise<CheckResult> | CheckResult;
 
+const DEFAULT_MEMORY_DEGRADED_PERCENT = 90;
+const DEFAULT_MEMORY_UNHEALTHY_PERCENT = 95;
+const DEFAULT_CHECK_TIMEOUT_MS = 2000;
+const DEFAULT_CACHE_TTL_MS = 2000;
+
+/**
+ * Thresholds that determine when the memory check flips to degraded/unhealthy.
+ */
+export interface MemoryThresholds {
+  degradedPercent?: number;
+  unhealthyPercent?: number;
+}
+
+/**
+ * Timeout configuration for all health checks with optional per-check overrides.
+ */
+export interface TimeoutOptions {
+  defaultMs?: number;
+  perCheck?: Record<string, number>;
+}
+
+/**
+ * Cache policy for memoising expensive health checks.
+ */
+export interface CacheOptions {
+  enabled?: boolean;
+  ttlMs?: number;
+}
+
 /**
  * Options for creating a health check handler
  */
@@ -35,6 +64,76 @@ export interface HealthCheckOptions {
   serviceName: string;
   checks?: Record<string, HealthCheckFunction>;
   includeMemoryCheck?: boolean;
+  memoryThresholds?: MemoryThresholds;
+  timeouts?: TimeoutOptions;
+  cache?: CacheOptions;
+}
+
+/**
+ * Creates health check options by merging sensible defaults with environment variables.
+ */
+export function createHealthConfigFromEnv(
+  serviceName: string,
+  overrides: Partial<HealthCheckOptions> = {},
+  env: NodeJS.ProcessEnv = process.env
+): HealthCheckOptions {
+  const parseOptionalNumber = (value?: string): number | undefined => {
+    if (typeof value === 'undefined' || value === '') {
+      return undefined;
+    }
+    const parsed = Number(value);
+    return Number.isNaN(parsed) ? undefined : parsed;
+  };
+
+  const parseOptionalBoolean = (value?: string): boolean | undefined => {
+    if (typeof value === 'undefined') {
+      return undefined;
+    }
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'true') {
+      return true;
+    }
+    if (normalized === 'false') {
+      return false;
+    }
+    return undefined;
+  };
+
+  const memoryThresholds: MemoryThresholds = {
+    degradedPercent:
+      overrides.memoryThresholds?.degradedPercent ??
+      parseOptionalNumber(env.HEALTH_MEMORY_DEGRADED_PERCENT) ??
+      DEFAULT_MEMORY_DEGRADED_PERCENT,
+    unhealthyPercent:
+      overrides.memoryThresholds?.unhealthyPercent ??
+      parseOptionalNumber(env.HEALTH_MEMORY_UNHEALTHY_PERCENT) ??
+      DEFAULT_MEMORY_UNHEALTHY_PERCENT,
+  };
+
+  const timeouts: TimeoutOptions = {
+    defaultMs:
+      overrides.timeouts?.defaultMs ??
+      parseOptionalNumber(env.HEALTH_CHECK_TIMEOUT_MS) ??
+      DEFAULT_CHECK_TIMEOUT_MS,
+    perCheck: overrides.timeouts?.perCheck,
+  };
+
+  const cache: CacheOptions = {
+    enabled: overrides.cache?.enabled ?? parseOptionalBoolean(env.HEALTH_CACHE_ENABLED) ?? true,
+    ttlMs:
+      overrides.cache?.ttlMs ??
+      parseOptionalNumber(env.HEALTH_CACHE_TTL_MS) ??
+      DEFAULT_CACHE_TTL_MS,
+  };
+
+  return {
+    includeMemoryCheck: overrides.includeMemoryCheck ?? true,
+    serviceName,
+    checks: overrides.checks,
+    memoryThresholds,
+    timeouts,
+    cache,
+  };
 }
 
 /**

@@ -9,6 +9,7 @@ const {
   createHealthHandler,
   createMemoryCheck,
   createDatabaseCheck,
+  createHealthConfigFromEnv,
 } = require('../dist/index');
 
 test('createLivenessHandler returns healthy status', () => {
@@ -108,4 +109,52 @@ test('readiness handler includes database check', async () => {
   assert(result.checks);
   assert(result.checks.database);
   assert(!result.checks.memory); // Memory should not be in readiness check
+});
+
+test('createHealthConfigFromEnv reads environment variables', () => {
+  const options = createHealthConfigFromEnv(
+    'test-service',
+    {},
+    {
+      HEALTH_CHECK_TIMEOUT_MS: '4500',
+      HEALTH_CACHE_TTL_MS: '1500',
+      HEALTH_CACHE_ENABLED: 'false',
+      HEALTH_MEMORY_DEGRADED_PERCENT: '85',
+      HEALTH_MEMORY_UNHEALTHY_PERCENT: '92',
+    }
+  );
+
+  assert.equal(options.serviceName, 'test-service');
+  assert.equal(options.timeouts?.defaultMs, 4500);
+  assert.equal(options.cache?.ttlMs, 1500);
+  assert.equal(options.cache?.enabled, false);
+  assert.equal(options.memoryThresholds?.degradedPercent, 85);
+  assert.equal(options.memoryThresholds?.unhealthyPercent, 92);
+});
+
+test('createHealthConfigFromEnv honours explicit overrides', () => {
+  const options = createHealthConfigFromEnv(
+    'test-service',
+    {
+      includeMemoryCheck: false,
+      cache: { enabled: true, ttlMs: 9999 },
+      memoryThresholds: { degradedPercent: 80, unhealthyPercent: 90 },
+      timeouts: { defaultMs: 1234, perCheck: { database: 2000 } },
+    },
+    {
+      HEALTH_CACHE_ENABLED: 'false',
+      HEALTH_CHECK_TIMEOUT_MS: '7000',
+      HEALTH_CACHE_TTL_MS: '200',
+      HEALTH_MEMORY_DEGRADED_PERCENT: '50',
+      HEALTH_MEMORY_UNHEALTHY_PERCENT: '70',
+    }
+  );
+
+  assert.equal(options.includeMemoryCheck, false);
+  assert.equal(options.cache?.enabled, true);
+  assert.equal(options.cache?.ttlMs, 9999);
+  assert.equal(options.timeouts?.defaultMs, 1234);
+  assert.equal(options.timeouts?.perCheck?.database, 2000);
+  assert.equal(options.memoryThresholds?.degradedPercent, 80);
+  assert.equal(options.memoryThresholds?.unhealthyPercent, 90);
 });
