@@ -1,3 +1,6 @@
+import type { Logger } from '@scribemed/logging';
+import { logger as defaultLogger } from '@scribemed/logging';
+
 /**
  * Health check status types
  */
@@ -97,6 +100,7 @@ export interface HealthCheckOptions {
   memoryThresholds?: MemoryThresholds;
   timeouts?: TimeoutOptions;
   cache?: CacheOptions;
+  logger?: Logger;
 }
 
 /**
@@ -163,6 +167,7 @@ export function createHealthConfigFromEnv(
     memoryThresholds,
     timeouts,
     cache,
+    logger: overrides.logger,
   };
 }
 
@@ -368,6 +373,80 @@ function resolveCacheTtl(cacheOptions?: CacheOptions): number {
   return DEFAULT_CACHE_TTL_MS;
 }
 
+function logCheckOutcome(
+  loggerInstance: Logger,
+  serviceName: string,
+  check: NormalizedCheck,
+  result: CheckResult
+) {
+  if (result.status === 'healthy' && !result.timedOut) {
+    return;
+  }
+
+  const context = {
+    service: serviceName,
+    check: check.name,
+    status: result.status,
+    timedOut: Boolean(result.timedOut),
+    responseTime: result.responseTime,
+    impact: check.impact,
+    message: result.message,
+  };
+
+  if (result.status === 'unhealthy') {
+    loggerInstance.error('Health check unhealthy', context);
+    return;
+  }
+
+  loggerInstance.warn('Health check degraded', context);
+}
+
+function logCheckExecutionError(
+  loggerInstance: Logger,
+  serviceName: string,
+  check: NormalizedCheck,
+  error: unknown
+) {
+  loggerInstance.error('Health check execution failed', {
+    service: serviceName,
+    check: check.name,
+    impact: check.impact,
+    error: serializeError(error),
+  });
+}
+
+function logOverallResult(loggerInstance: Logger, response: HealthResponse) {
+  const context = {
+    service: response.service,
+    status: response.status,
+    timestamp: response.timestamp,
+  };
+
+  if (response.status === 'healthy') {
+    loggerInstance.debug('Health summary', context);
+    return;
+  }
+
+  if (response.status === 'degraded') {
+    loggerInstance.warn('Health summary degraded', context);
+    return;
+  }
+
+  loggerInstance.error('Health summary unhealthy', context);
+}
+
+function serializeError(error: unknown) {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    };
+  }
+
+  return { message: String(error) };
+}
+
 interface NormalizedCheck {
   name: string;
   fn: HealthCheckFunction;
@@ -423,6 +502,7 @@ function determineOverallStatus(checkResults: Record<string, CheckResult>): Heal
  */
 export async function runHealthChecks(options: HealthCheckOptions): Promise<HealthResponse> {
   const checks: Record<string, HealthCheckDefinition> = { ...options.checks };
+  const activeLogger = options.logger ?? defaultLogger;
 
   // Add memory check if requested
   if (options.includeMemoryCheck !== false) {
@@ -441,13 +521,17 @@ export async function runHealthChecks(options: HealthCheckOptions): Promise<Heal
 
     try {
       const result = await executeCheckWithTimeout(check, timeoutMs);
-      checkResults[check.name] = withResponseTime(result, Date.now() - start);
+      const finalResult = withResponseTime(result, Date.now() - start);
+      checkResults[check.name] = finalResult;
+      logCheckOutcome(activeLogger, options.serviceName, check, finalResult);
     } catch (error) {
-      checkResults[check.name] = {
+      const failureResult: CheckResult = {
         status: 'unhealthy',
         message: error instanceof Error ? error.message : 'Unknown error',
         responseTime: Date.now() - start,
       };
+      checkResults[check.name] = failureResult;
+      logCheckExecutionError(activeLogger, options.serviceName, check, error);
     }
   });
 
@@ -455,12 +539,15 @@ export async function runHealthChecks(options: HealthCheckOptions): Promise<Heal
 
   const overallStatus = determineOverallStatus(checkResults);
 
-  return {
+  const response: HealthResponse = {
     status: overallStatus,
     timestamp: new Date().toISOString(),
     service: options.serviceName,
     checks: checkResults,
   };
+
+  logOverallResult(activeLogger, response);
+  return response;
 }
 
 /**

@@ -14,6 +14,23 @@ const {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const createMockLogger = () => {
+  const calls = {
+    debug: [],
+    info: [],
+    warn: [],
+    error: [],
+  };
+
+  return {
+    debug: (message, context) => calls.debug.push({ message, context }),
+    info: (message, context) => calls.info.push({ message, context }),
+    warn: (message, context) => calls.warn.push({ message, context }),
+    error: (message, context) => calls.error.push({ message, context }),
+    calls,
+  };
+};
+
 test('createLivenessHandler returns healthy status', () => {
   const handler = createLivenessHandler('test-service');
   const result = handler();
@@ -179,6 +196,48 @@ test('health handler cache can be disabled', async () => {
   await handler();
   await handler();
   assert.equal(executions, 2);
+});
+
+test('health handler logs unhealthy results', async () => {
+  const mockLogger = createMockLogger();
+  const handler = createHealthHandler({
+    serviceName: 'test-service',
+    logger: mockLogger,
+    cache: { enabled: false },
+    checks: {
+      failing: async () => ({ status: 'unhealthy', message: 'boom' }),
+    },
+  });
+
+  await handler();
+  const unhealthyLog = mockLogger.calls.error.find(
+    (entry) => entry.message === 'Health check unhealthy'
+  );
+  const summaryLog = mockLogger.calls.error.find(
+    (entry) => entry.message === 'Health summary unhealthy'
+  );
+  assert(unhealthyLog);
+  assert(summaryLog);
+});
+
+test('health handler logs execution errors', async () => {
+  const mockLogger = createMockLogger();
+  const handler = createHealthHandler({
+    serviceName: 'test-service',
+    logger: mockLogger,
+    cache: { enabled: false },
+    checks: {
+      broken: async () => {
+        throw new Error('explode');
+      },
+    },
+  });
+
+  await handler();
+  const executionLog = mockLogger.calls.error.find(
+    (entry) => entry.message === 'Health check execution failed'
+  );
+  assert(executionLog);
 });
 
 test('createDatabaseCheck returns unhealthy when database check fails', async () => {
