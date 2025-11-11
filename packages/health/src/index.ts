@@ -309,6 +309,65 @@ function withResponseTime(result: CheckResult, durationMs: number): CheckResult 
   };
 }
 
+function createCachedHandler<T>(
+  factory: () => Promise<T>,
+  cacheOptions?: CacheOptions
+): () => Promise<T> {
+  if (!shouldUseCache(cacheOptions)) {
+    return factory;
+  }
+
+  const ttlMs = resolveCacheTtl(cacheOptions);
+  let cached: { value: T; expiresAt: number } | null = null;
+  let inFlight: Promise<T> | null = null;
+
+  return async (): Promise<T> => {
+    const now = Date.now();
+    if (cached && cached.expiresAt > now) {
+      return cached.value;
+    }
+
+    if (inFlight) {
+      return inFlight;
+    }
+
+    inFlight = factory()
+      .then((result) => {
+        cached = { value: result, expiresAt: Date.now() + ttlMs };
+        return result;
+      })
+      .finally(() => {
+        inFlight = null;
+      });
+
+    return inFlight;
+  };
+}
+
+function shouldUseCache(cacheOptions?: CacheOptions): boolean {
+  if (!cacheOptions) {
+    return true;
+  }
+
+  if (cacheOptions.enabled === false) {
+    return false;
+  }
+
+  if (typeof cacheOptions.ttlMs === 'number' && cacheOptions.ttlMs <= 0) {
+    return false;
+  }
+
+  return true;
+}
+
+function resolveCacheTtl(cacheOptions?: CacheOptions): number {
+  if (cacheOptions?.ttlMs && cacheOptions.ttlMs > 0) {
+    return cacheOptions.ttlMs;
+  }
+
+  return DEFAULT_CACHE_TTL_MS;
+}
+
 interface NormalizedCheck {
   name: string;
   fn: HealthCheckFunction;
@@ -419,7 +478,7 @@ export function createLivenessHandler(serviceName: string) {
  * Creates a readiness check handler (checks dependencies)
  */
 export function createReadinessHandler(options: HealthCheckOptions) {
-  return async (): Promise<HealthResponse> => {
+  const runner = async (): Promise<HealthResponse> => {
     // For readiness, we only check critical dependencies (not memory)
     const readinessChecks: Record<string, HealthCheckDefinition> = {};
 
@@ -441,13 +500,14 @@ export function createReadinessHandler(options: HealthCheckOptions) {
       includeMemoryCheck: false,
     });
   };
+
+  return createCachedHandler(runner, options.cache);
 }
 
 /**
  * Creates a comprehensive health check handler
  */
 export function createHealthHandler(options: HealthCheckOptions) {
-  return async (): Promise<HealthResponse> => {
-    return runHealthChecks(options);
-  };
+  const runner = (): Promise<HealthResponse> => runHealthChecks(options);
+  return createCachedHandler(runner, options.cache);
 }

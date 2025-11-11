@@ -141,6 +141,46 @@ test('health handler honours per-check timeout overrides', async () => {
   assert(result.checks.slow.responseTime >= 15);
 });
 
+test('health handler caches results for the configured TTL', async () => {
+  let executions = 0;
+  const handler = createHealthHandler({
+    serviceName: 'test-service',
+    checks: {
+      cached: async () => {
+        executions += 1;
+        return { status: 'healthy', executions };
+      },
+    },
+    cache: { ttlMs: 25 },
+  });
+
+  await handler();
+  await handler();
+  assert.equal(executions, 1);
+
+  await sleep(30);
+  await handler();
+  assert.equal(executions, 2);
+});
+
+test('health handler cache can be disabled', async () => {
+  let executions = 0;
+  const handler = createHealthHandler({
+    serviceName: 'test-service',
+    checks: {
+      cached: async () => {
+        executions += 1;
+        return { status: 'healthy', executions };
+      },
+    },
+    cache: { enabled: false },
+  });
+
+  await handler();
+  await handler();
+  assert.equal(executions, 2);
+});
+
 test('createDatabaseCheck returns unhealthy when database check fails', async () => {
   const mockDatabase = {
     healthCheck: async () => false,
