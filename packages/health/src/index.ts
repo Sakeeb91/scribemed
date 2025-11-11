@@ -6,6 +6,7 @@ import { logger as defaultLogger } from '@scribemed/logging';
  */
 export type HealthStatus = 'healthy' | 'degraded' | 'unhealthy';
 type CircuitBreakerState = 'closed' | 'open' | 'half-open';
+type FetchImplementation = typeof fetch;
 
 /**
  * Individual check result
@@ -17,6 +18,8 @@ export interface CheckResult {
   timedOut?: boolean;
   circuitBreakerState?: CircuitBreakerState;
   retryAfterMs?: number;
+  remoteStatus?: HealthStatus;
+  remoteService?: string;
   [key: string]: unknown;
 }
 
@@ -130,6 +133,15 @@ export interface HealthCheckOptions {
   metrics?: HealthMetricsOptions;
 }
 
+export interface RemoteHealthCheckOptions {
+  serviceName: string;
+  endpoint: string;
+  timeoutMs?: number;
+  headers?: Record<string, string>;
+  degradeOnDegraded?: boolean;
+  fetchImplementation?: FetchImplementation;
+}
+
 /**
  * Creates health check options by merging sensible defaults with environment variables.
  */
@@ -229,6 +241,61 @@ export function createDatabaseCheck(database: {
         message: error instanceof Error ? error.message : 'Unknown database error',
         responseTime,
       };
+    }
+  };
+}
+
+/**
+ * Creates a health check that queries another service's health endpoint.
+ */
+export function createRemoteHealthCheck(options: RemoteHealthCheckOptions): HealthCheckFunction {
+  const fetchImpl = options.fetchImplementation ?? globalThis.fetch;
+  if (typeof fetchImpl !== 'function') {
+    throw new Error('Fetch API is not available in this runtime');
+  }
+
+  return async (): Promise<CheckResult> => {
+    const controller = new AbortController();
+    const timeout =
+      options.timeoutMs && options.timeoutMs > 0
+        ? setTimeout(() => controller.abort(), options.timeoutMs)
+        : undefined;
+    if (timeout && typeof timeout.unref === 'function') {
+      timeout.unref();
+    }
+
+    const start = Date.now();
+    try {
+      const response = await fetchImpl(options.endpoint, {
+        method: 'GET',
+        headers: { Accept: 'application/json', ...options.headers },
+        signal: controller.signal,
+      });
+      const payload = await response.json();
+      const remoteStatus: HealthStatus =
+        payload?.status === 'degraded'
+          ? 'degraded'
+          : payload?.status === 'unhealthy'
+            ? 'unhealthy'
+            : 'healthy';
+      const status = determineRemoteStatus(remoteStatus, options.degradeOnDegraded ?? true);
+      return {
+        status,
+        remoteStatus,
+        remoteService: payload?.service ?? options.serviceName,
+        responseTime: Date.now() - start,
+      };
+    } catch (error) {
+      return {
+        status: 'unhealthy',
+        message: error instanceof Error ? error.message : 'Remote health check failed',
+        remoteService: options.serviceName,
+        responseTime: Date.now() - start,
+      };
+    } finally {
+      if (timeout) {
+        clearTimeout(timeout);
+      }
     }
   };
 }
@@ -838,6 +905,19 @@ function resolveCircuitBreaker(
   }
 
   return new CircuitBreaker(name, options);
+}
+
+function determineRemoteStatus(
+  remoteStatus: HealthStatus,
+  degradeOnDegraded: boolean
+): HealthStatus {
+  if (remoteStatus === 'unhealthy') {
+    return 'unhealthy';
+  }
+  if (remoteStatus === 'degraded') {
+    return degradeOnDegraded ? 'degraded' : 'healthy';
+  }
+  return 'healthy';
 }
 
 /**

@@ -10,6 +10,7 @@ const {
   createMemoryCheck,
   createDatabaseCheck,
   createHealthConfigFromEnv,
+  createRemoteHealthCheck,
   getHealthMetricsSnapshot,
 } = require('../dist/index');
 
@@ -44,6 +45,11 @@ const createMockCollector = () => {
     events,
   };
 };
+
+const createFetchStub = (payload) => async () => ({
+  ok: true,
+  json: async () => payload,
+});
 
 test('createLivenessHandler returns healthy status', () => {
   const handler = createLivenessHandler('test-service');
@@ -308,6 +314,39 @@ test('circuit breaker recovers after cooldown', async () => {
   await sleep(150);
   const result = await handler();
   assert.equal(result.checks.flaky.status, 'healthy');
+});
+
+test('remote health check maps degraded status', async () => {
+  const remoteCheck = createRemoteHealthCheck({
+    serviceName: 'reports',
+    endpoint: 'http://reports/health',
+    fetchImplementation: createFetchStub({ status: 'degraded', service: 'reports' }),
+  });
+
+  const result = await remoteCheck();
+  assert.equal(result.status, 'degraded');
+  assert.equal(result.remoteService, 'reports');
+});
+
+test('remote health check handles errors and degrade overrides', async () => {
+  const tolerantCheck = createRemoteHealthCheck({
+    serviceName: 'reports',
+    endpoint: 'http://reports/health',
+    degradeOnDegraded: false,
+    fetchImplementation: createFetchStub({ status: 'degraded', service: 'reports' }),
+  });
+  const healthyResult = await tolerantCheck();
+  assert.equal(healthyResult.status, 'healthy');
+
+  const failingCheck = createRemoteHealthCheck({
+    serviceName: 'reports',
+    endpoint: 'http://reports/health',
+    fetchImplementation: async () => {
+      throw new Error('boom');
+    },
+  });
+  const failureResult = await failingCheck();
+  assert.equal(failureResult.status, 'unhealthy');
 });
 
 test('health handler records metrics via collector', async () => {
