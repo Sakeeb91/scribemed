@@ -58,11 +58,40 @@ export interface CacheOptions {
 }
 
 /**
+ * Circuit breaker configuration for health checks.
+ * Detailed behaviour lands in later commits; the shape is defined now so
+ * call-sites can begin annotating their checks.
+ */
+export interface CircuitBreakerOptions {
+  failureThreshold?: number;
+  successThreshold?: number;
+  cooldownPeriodMs?: number;
+  halfOpenSuccesses?: number;
+  openStatus?: HealthStatus;
+  halfOpenStatus?: HealthStatus;
+}
+
+export type HealthCheckImpact = 'critical' | 'non-critical';
+
+/**
+ * Configuration object that enables advanced health check behaviour.
+ */
+export interface HealthCheckConfig {
+  run: HealthCheckFunction;
+  timeoutMs?: number;
+  impact?: HealthCheckImpact;
+  circuitBreaker?: CircuitBreakerOptions;
+  tags?: string[];
+}
+
+export type HealthCheckDefinition = HealthCheckFunction | HealthCheckConfig;
+
+/**
  * Options for creating a health check handler
  */
 export interface HealthCheckOptions {
   serviceName: string;
-  checks?: Record<string, HealthCheckFunction>;
+  checks?: Record<string, HealthCheckDefinition>;
   includeMemoryCheck?: boolean;
   memoryThresholds?: MemoryThresholds;
   timeouts?: TimeoutOptions;
@@ -212,6 +241,41 @@ function resolveMemoryStatus(
   return heapUsagePercent > degradedThreshold ? 'degraded' : 'healthy';
 }
 
+interface NormalizedCheck {
+  name: string;
+  fn: HealthCheckFunction;
+  timeoutMs?: number;
+  impact: HealthCheckImpact;
+  circuitBreaker?: CircuitBreakerOptions;
+  tags?: string[];
+}
+
+function normalizeCheckDefinition(
+  name: string,
+  definition: HealthCheckDefinition
+): NormalizedCheck {
+  if (!isHealthCheckConfig(definition)) {
+    return {
+      name,
+      fn: definition,
+      impact: 'critical',
+    };
+  }
+
+  return {
+    name,
+    fn: definition.run,
+    timeoutMs: definition.timeoutMs,
+    impact: definition.impact ?? 'critical',
+    circuitBreaker: definition.circuitBreaker,
+    tags: definition.tags,
+  };
+}
+
+function isHealthCheckConfig(definition: HealthCheckDefinition): definition is HealthCheckConfig {
+  return typeof definition === 'object' && definition !== null && 'run' in definition;
+}
+
 /**
  * Determines overall health status from individual check results
  */
@@ -231,7 +295,7 @@ function determineOverallStatus(checkResults: Record<string, CheckResult>): Heal
  * Runs all health checks and returns a comprehensive health response
  */
 export async function runHealthChecks(options: HealthCheckOptions): Promise<HealthResponse> {
-  const checks: Record<string, HealthCheckFunction> = { ...options.checks };
+  const checks: Record<string, HealthCheckDefinition> = { ...options.checks };
 
   // Add memory check if requested
   if (options.includeMemoryCheck !== false) {
@@ -239,13 +303,17 @@ export async function runHealthChecks(options: HealthCheckOptions): Promise<Heal
   }
 
   // Run all checks
+  const normalizedChecks = Object.entries(checks).map(([name, definition]) =>
+    normalizeCheckDefinition(name, definition)
+  );
+
   const checkResults: Record<string, CheckResult> = {};
-  const checkPromises = Object.entries(checks).map(async ([name, checkFn]) => {
+  const checkPromises = normalizedChecks.map(async (check) => {
     try {
-      const result = await checkFn();
-      checkResults[name] = result;
+      const result = await check.fn();
+      checkResults[check.name] = result;
     } catch (error) {
-      checkResults[name] = {
+      checkResults[check.name] = {
         status: 'unhealthy',
         message: error instanceof Error ? error.message : 'Unknown error',
       };
@@ -281,7 +349,7 @@ export function createLivenessHandler(serviceName: string) {
 export function createReadinessHandler(options: HealthCheckOptions) {
   return async (): Promise<HealthResponse> => {
     // For readiness, we only check critical dependencies (not memory)
-    const readinessChecks: Record<string, HealthCheckFunction> = {};
+    const readinessChecks: Record<string, HealthCheckDefinition> = {};
 
     // Include database check if provided
     if (options.checks?.database) {

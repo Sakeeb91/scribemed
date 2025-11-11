@@ -82,6 +82,24 @@ test('createHealthHandler excludes memory check when disabled', async () => {
   assert(!result.checks || !result.checks.memory);
 });
 
+test('createHealthHandler accepts configuration objects', async () => {
+  const handler = createHealthHandler({
+    serviceName: 'test-service',
+    checks: {
+      cache: {
+        run: async () => ({ status: 'healthy', message: 'cache ok' }),
+        impact: 'non-critical',
+        timeoutMs: 500,
+      },
+    },
+  });
+
+  const result = await handler();
+  assert(result.checks);
+  assert.equal(result.checks.cache.status, 'healthy');
+  assert.equal(result.checks.cache.message, 'cache ok');
+});
+
 test('createDatabaseCheck returns unhealthy when database check fails', async () => {
   const mockDatabase = {
     healthCheck: async () => false,
