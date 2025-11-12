@@ -61,3 +61,13 @@ test('POST /transcriptions acknowledges payload', async (t) => {
   assert.equal(payload.message, 'Transcription request accepted');
   assert(payload.characters > 0);
 });
+
+test('GET /metrics exposes Prometheus metrics', async (t) => {
+  const { server, url } = await startServer();
+  t.after(() => server.close());
+
+  const response = await fetch(`${url}/metrics`);
+  assert.equal(response.status, 200);
+  const body = await response.text();
+  assert(body.includes('scribemed_health_check_status'));
+});

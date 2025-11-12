@@ -6,24 +6,57 @@ const {
   createLivenessHandler,
   createReadinessHandler,
   createHealthHandler,
+  createHealthConfigFromEnv,
+  getHealthMetricsSnapshot,
 } = require('@scribemed/health');
 
 const PORT = Number(process.env.PORT ?? 8080);
 
-// Initialize health check handlers
-const livenessHandler = createLivenessHandler('transcription');
-const readinessHandler = createReadinessHandler({
-  serviceName: 'transcription',
-  checks: {},
-});
-const healthHandler = createHealthHandler({
-  serviceName: 'transcription',
-  checks: {},
-});
+function createSynthesizerCheck() {
+  const maxLatency = Number(process.env.TRANSCRIPTION_SYNTH_LATENCY_MS ?? 120);
+  return async () => {
+    const simulatedLatency = Number(process.env.SIMULATED_SYNTH_LATENCY ?? 25);
+    const status = simulatedLatency > maxLatency ? 'degraded' : 'healthy';
+    return {
+      status,
+      simulatedLatency,
+      maxLatency,
+    };
+  };
+}
+
+function buildHealthHandlers() {
+  const healthOptions = createHealthConfigFromEnv('transcription', {
+    cache: { ttlMs: Number(process.env.HEALTH_CACHE_TTL_MS ?? 1500) },
+    timeouts: { defaultMs: 1200 },
+    checks: {
+      synthesizer: {
+        run: createSynthesizerCheck(),
+        impact: 'critical',
+        circuitBreaker: {
+          failureThreshold: 2,
+          cooldownPeriodMs: 8000,
+          openStatus: 'unhealthy',
+        },
+      },
+    },
+  });
+
+  return {
+    liveness: createLivenessHandler(healthOptions.serviceName),
+    readiness: createReadinessHandler(healthOptions),
+    health: createHealthHandler(healthOptions),
+  };
+}
+
+const {
+  liveness: livenessHandler,
+  readiness: readinessHandler,
+  health: healthHandler,
+} = buildHealthHandlers();
 
 function createServer() {
   return http.createServer(async (request, response) => {
-    // Health check endpoints
     if (request.url === '/health/live') {
       const health = livenessHandler();
       const statusCode = health.status === 'healthy' ? 200 : 503;
@@ -45,6 +78,12 @@ function createServer() {
       const statusCode = health.status === 'healthy' ? 200 : 503;
       response.writeHead(statusCode, { 'Content-Type': 'application/json' });
       response.end(JSON.stringify(health));
+      return;
+    }
+
+    if (request.url === '/metrics') {
+      response.writeHead(200, { 'Content-Type': 'text/plain; version=0.0.4' });
+      response.end(getHealthMetricsSnapshot());
       return;
     }
 
