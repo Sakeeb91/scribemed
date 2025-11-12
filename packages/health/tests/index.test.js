@@ -349,6 +349,23 @@ test('remote health check handles errors and degrade overrides', async () => {
   assert.equal(failureResult.status, 'unhealthy');
 });
 
+test('non-critical failures result in degraded overall status', async () => {
+  const handler = createHealthHandler({
+    serviceName: 'test-service',
+    cache: { enabled: false },
+    checks: {
+      optional: {
+        run: async () => ({ status: 'unhealthy', message: 'optional failed' }),
+        impact: 'non-critical',
+      },
+    },
+  });
+
+  const result = await handler();
+  assert.equal(result.status, 'degraded');
+  assert.equal(result.checks.optional.status, 'unhealthy');
+});
+
 test('health handler records metrics via collector', async () => {
   const collector = createMockCollector();
   const handler = createHealthHandler({

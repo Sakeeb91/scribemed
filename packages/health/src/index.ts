@@ -20,6 +20,7 @@ export interface CheckResult {
   retryAfterMs?: number;
   remoteStatus?: HealthStatus;
   remoteService?: string;
+  impact?: HealthCheckImpact;
   [key: string]: unknown;
 }
 
@@ -924,14 +925,35 @@ function determineRemoteStatus(
  * Determines overall health status from individual check results
  */
 function determineOverallStatus(checkResults: Record<string, CheckResult>): HealthStatus {
-  const statuses = Object.values(checkResults).map((check) => check.status);
+  let hasCriticalUnhealthy = false;
+  let hasCriticalDegraded = false;
+  let hasNonCriticalIssue = false;
 
-  if (statuses.some((s) => s === 'unhealthy')) {
+  Object.values(checkResults).forEach((result) => {
+    const impact = result.impact ?? 'critical';
+    if (result.status === 'unhealthy') {
+      if (impact === 'critical') {
+        hasCriticalUnhealthy = true;
+      } else {
+        hasNonCriticalIssue = true;
+      }
+    } else if (result.status === 'degraded') {
+      if (impact === 'critical') {
+        hasCriticalDegraded = true;
+      } else {
+        hasNonCriticalIssue = true;
+      }
+    }
+  });
+
+  if (hasCriticalUnhealthy) {
     return 'unhealthy';
   }
-  if (statuses.some((s) => s === 'degraded')) {
+
+  if (hasCriticalDegraded || hasNonCriticalIssue) {
     return 'degraded';
   }
+
   return 'healthy';
 }
 
@@ -966,6 +988,7 @@ export async function runHealthChecks(
         ...check.breaker.getBypassResult(),
         responseTime: 0,
       };
+      breakerResult.impact = check.impact;
       checkResults[check.name] = breakerResult;
       recordCheckMetrics(options.metrics, options.serviceName, check, breakerResult);
       logCircuitBreakerBypass(activeLogger, options.serviceName, check);
@@ -975,6 +998,7 @@ export async function runHealthChecks(
     try {
       const result = await executeCheckWithTimeout(check, timeoutMs);
       const finalResult = withResponseTime(result, Date.now() - start);
+      finalResult.impact = check.impact;
       checkResults[check.name] = finalResult;
       recordCheckMetrics(options.metrics, options.serviceName, check, finalResult);
       logCheckOutcome(activeLogger, options.serviceName, check, finalResult);
@@ -990,6 +1014,7 @@ export async function runHealthChecks(
         message: error instanceof Error ? error.message : 'Unknown error',
         responseTime: Date.now() - start,
       };
+      failureResult.impact = check.impact;
       checkResults[check.name] = failureResult;
       recordCheckMetrics(options.metrics, options.serviceName, check, failureResult);
       logCheckExecutionError(activeLogger, options.serviceName, check, error);
