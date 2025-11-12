@@ -1,3 +1,12 @@
+import { getDatabase } from '@scribemed/database';
+import {
+  createDatabaseCheck,
+  createHealthConfigFromEnv,
+  createHealthHandler,
+  createLivenessHandler,
+  createReadinessHandler,
+  getHealthMetricsSnapshot,
+} from '@scribemed/health';
 import { logger } from '@scribemed/logging';
 import cors from 'cors';
 import express, { Application, NextFunction, Request, Response, json } from 'express';
@@ -20,6 +29,7 @@ export function createApp(config: AppConfig): Application {
   const container = createContainer(config);
   const { authenticate } = createAuthMiddleware(config);
   const rateLimiter = createRateLimiter(config);
+  const healthHandlers = buildHealthHandlers(config);
 
   app.use(helmet());
   app.use(cors());
@@ -35,8 +45,22 @@ export function createApp(config: AppConfig): Application {
     createSessionController(container.authService, authenticate, requireRole)
   );
 
-  app.get('/health', (_req: Request, res: Response) => {
-    res.json({ status: 'ok', service: 'auth', environment: config.env });
+  app.get('/health/live', (_req: Request, res: Response) => {
+    res.json(healthHandlers.liveness());
+  });
+
+  app.get('/health/ready', async (_req: Request, res: Response) => {
+    const health = await healthHandlers.readiness();
+    res.status(health.status === 'healthy' ? 200 : 503).json(health);
+  });
+
+  app.get('/health', async (_req: Request, res: Response) => {
+    const health = await healthHandlers.health();
+    res.status(health.status === 'healthy' ? 200 : 503).json(health);
+  });
+
+  app.get('/metrics', (_req: Request, res: Response) => {
+    res.type('text/plain').send(getHealthMetricsSnapshot());
   });
 
   app.use((_req, res) => {
@@ -49,4 +73,55 @@ export function createApp(config: AppConfig): Application {
   });
 
   return app;
+}
+
+function buildHealthHandlers(config: AppConfig) {
+  const databaseCheck = createDatabaseCheck({
+    healthCheck: async () => {
+      if (config.env === 'test') {
+        return true;
+      }
+      try {
+        const db = await getDatabase();
+        await db.query('SELECT 1');
+        return true;
+      } catch (error) {
+        logger.error('Auth database health check failed', { error });
+        return false;
+      }
+    },
+  });
+
+  const rateLimiterCheck = {
+    run: async () => {
+      const maxRequests = config.rateLimit.maxRequests;
+      const status: 'healthy' | 'degraded' = maxRequests > 1000 ? 'degraded' : 'healthy';
+      return {
+        status,
+        maxRequests,
+      };
+    },
+    impact: 'non-critical' as const,
+  };
+
+  const healthOptions = createHealthConfigFromEnv('auth', {
+    cache: { ttlMs: Number(process.env.HEALTH_CACHE_TTL_MS ?? 2000) },
+    checks: {
+      database: databaseCheck,
+      rateLimiter: rateLimiterCheck,
+    },
+  });
+
+  const checks = healthOptions.checks ?? {};
+  const readinessOptions = {
+    ...healthOptions,
+    checks: { database: checks.database ?? databaseCheck },
+    includeMemoryCheck: false,
+  };
+
+  return {
+    liveness: createLivenessHandler(healthOptions.serviceName),
+    readiness: createReadinessHandler(readinessOptions),
+    health: createHealthHandler(healthOptions),
+  };
 }
