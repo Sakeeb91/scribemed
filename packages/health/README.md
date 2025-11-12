@@ -170,6 +170,108 @@ const healthHandler = createHealthHandler({
 });
 ```
 
+## Advanced Configuration
+
+### Environment-driven options
+
+Use `createHealthConfigFromEnv` to hydrate handler options from `process.env` so you can tune thresholds without editing code:
+
+```javascript
+const { createHealthConfigFromEnv, createHealthHandler } = require('@scribemed/health');
+
+const healthHandler = createHealthHandler(
+  createHealthConfigFromEnv('my-service', {
+    checks: {
+      database: databaseCheck,
+    },
+    timeouts: { perCheck: { database: 1500 } },
+  })
+);
+```
+
+The helper understands:
+
+- `HEALTH_CHECK_TIMEOUT_MS`
+- `HEALTH_CACHE_TTL_MS`
+- `HEALTH_CACHE_ENABLED`
+- `HEALTH_MEMORY_DEGRADED_PERCENT`
+- `HEALTH_MEMORY_UNHEALTHY_PERCENT`
+
+### Cache and timeout controls
+
+Every handler caches results for a short TTL to avoid hammering shared dependencies. Set `cache.enabled` to `false` to disable, or provide a custom TTL:
+
+```javascript
+const handler = createHealthHandler({
+  serviceName: 'my-service',
+  cache: { ttlMs: 2000 },
+  timeouts: {
+    defaultMs: 1000,
+    perCheck: { database: 2000 },
+  },
+  checks: { database: databaseCheck },
+});
+```
+
+### Circuit breakers for flaky dependencies
+
+Wrap any expensive check with a circuit breaker by providing `impact` and `circuitBreaker` options. The breaker trips after repeated failures, short-circuits calls, then probes dependencies again after a cooldown:
+
+```javascript
+const redisCheck = {
+  run: async () => {
+    const healthy = await redis.ping();
+    return { status: healthy ? 'healthy' : 'unhealthy' };
+  },
+  impact: 'non-critical',
+  circuitBreaker: {
+    failureThreshold: 3,
+    cooldownPeriodMs: 10_000,
+    openStatus: 'degraded',
+  },
+};
+
+const handler = createHealthHandler({
+  serviceName: 'worker',
+  checks: { redis: redisCheck },
+});
+```
+
+### Aggregate downstream services
+
+`createRemoteHealthCheck` lets a gateway expose the health of services it depends on:
+
+```javascript
+const { createRemoteHealthCheck } = require('@scribemed/health');
+
+const handler = createHealthHandler({
+  serviceName: 'api-gateway',
+  checks: {
+    transcription: createRemoteHealthCheck({
+      serviceName: 'transcription',
+      endpoint: 'http://transcription:8082/health',
+      timeoutMs: 1500,
+    }),
+  },
+});
+```
+
+### Metrics export
+
+The package keeps lightweight Prometheus-style metrics for every check. Call `getHealthMetricsSnapshot()` and expose the payload via `/metrics` to plug into your monitoring stack.
+
+```javascript
+const { getHealthMetricsSnapshot } = require('@scribemed/health');
+
+app.get('/metrics', (_req, res) => {
+  res.type('text/plain').send(getHealthMetricsSnapshot());
+});
+```
+
+### Critical vs non-critical impact
+
+Set `impact: 'non-critical'` on optional dependencies. Failing non-critical checks mark the overall service as `degraded` instead of `unhealthy`, so rollouts can proceed while auxiliary systems recover.
+
 ## Kubernetes Integration
 
 The health endpoints are designed to work with Kubernetes liveness and readiness probes:
@@ -211,6 +313,18 @@ Creates a database health check function.
 ### `createMemoryCheck()`
 
 Creates a memory usage health check function.
+
+### `createHealthConfigFromEnv(serviceName: string, overrides?: Partial<HealthCheckOptions>)`
+
+Builds a `HealthCheckOptions` object from environment variables (see the "Advanced Configuration" section).
+
+### `createRemoteHealthCheck(options: RemoteHealthCheckOptions)`
+
+Returns a check that calls another service's `/health` endpoint and maps the remote status into the local health response.
+
+### `getHealthMetricsSnapshot()`
+
+Returns the Prometheus-formatted metrics string for all recorded health checks.
 
 ## Testing
 
