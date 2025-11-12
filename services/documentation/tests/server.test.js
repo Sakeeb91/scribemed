@@ -52,6 +52,17 @@ function createMockHealthModule() {
         status: isHealthy ? 'healthy' : 'unhealthy',
       };
     },
+    createHealthConfigFromEnv: (serviceName, overrides = {}) => ({
+      serviceName,
+      checks: overrides.checks ?? {},
+    }),
+    createRemoteHealthCheck:
+      ({ serviceName }) =>
+      async () => ({
+        status: 'healthy',
+        remoteService: serviceName,
+      }),
+    getHealthMetricsSnapshot: () => 'scribemed_health_check_status 1',
   };
 }
 
@@ -125,4 +136,14 @@ test('GET /health/ready returns healthy when database check passes', async (t) =
   const payload = await response.json();
   assert.equal(payload.service, 'documentation');
   assert.equal(payload.status, 'healthy');
+});
+
+test('GET /metrics returns Prometheus payload', async (t) => {
+  const { server, url } = await startServer();
+  t.after(() => server.close());
+
+  const response = await fetch(`${url}/metrics`);
+  assert.equal(response.status, 200);
+  const body = await response.text();
+  assert(body.includes('scribemed_health_check_status'));
 });

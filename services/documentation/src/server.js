@@ -4,6 +4,9 @@ const http = require('node:http');
 
 const PORT = Number(process.env.PORT ?? 8081);
 const DATABASE_RETRY_DELAY_MS = Number(process.env.DATABASE_RETRY_DELAY_MS ?? 5000);
+const CODING_HEALTH_URL = process.env.CODING_HEALTH_URL ?? 'http://coding:8082/health';
+const TRANSCRIPTION_HEALTH_URL =
+  process.env.TRANSCRIPTION_HEALTH_URL ?? 'http://transcription:8080/health';
 
 let databaseCheck = null;
 let databaseInitializationError = null;
@@ -82,10 +85,29 @@ function resolveHealthChecks(healthChecksOverride) {
   return { database: createPendingDatabaseCheck() };
 }
 
-function buildHealthOptions(healthChecksOverride) {
+function buildHealthOptions(healthModule, healthChecksOverride) {
+  return healthModule.createHealthConfigFromEnv('documentation', {
+    cache: { ttlMs: Number(process.env.HEALTH_CACHE_TTL_MS ?? 2000) },
+    timeouts: { defaultMs: 1500 },
+    checks: {
+      ...resolveHealthChecks(healthChecksOverride),
+      ...createRemoteChecks(healthModule),
+    },
+  });
+}
+
+function createRemoteChecks(healthModule) {
   return {
-    serviceName: 'documentation',
-    checks: resolveHealthChecks(healthChecksOverride),
+    coding: healthModule.createRemoteHealthCheck({
+      serviceName: 'coding',
+      endpoint: CODING_HEALTH_URL,
+      timeoutMs: 1500,
+    }),
+    transcription: healthModule.createRemoteHealthCheck({
+      serviceName: 'transcription',
+      endpoint: TRANSCRIPTION_HEALTH_URL,
+      timeoutMs: 1500,
+    }),
   };
 }
 
@@ -106,7 +128,7 @@ function createServer(options = {}) {
 
     if (request.url === '/health/ready') {
       const readinessHandler = healthModule.createReadinessHandler(
-        buildHealthOptions(healthChecksOverride)
+        buildHealthOptions(healthModule, healthChecksOverride)
       );
       const health = await readinessHandler();
       const statusCode = health.status === 'healthy' ? 200 : 503;
@@ -117,12 +139,18 @@ function createServer(options = {}) {
 
     if (request.url === '/health') {
       const healthHandler = healthModule.createHealthHandler(
-        buildHealthOptions(healthChecksOverride)
+        buildHealthOptions(healthModule, healthChecksOverride)
       );
       const health = await healthHandler();
       const statusCode = health.status === 'healthy' ? 200 : 503;
       response.writeHead(statusCode, { 'Content-Type': 'application/json' });
       response.end(JSON.stringify(health));
+      return;
+    }
+
+    if (request.url === '/metrics') {
+      response.writeHead(200, { 'Content-Type': 'text/plain; version=0.0.4' });
+      response.end(healthModule.getHealthMetricsSnapshot());
       return;
     }
 
