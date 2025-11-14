@@ -1,6 +1,7 @@
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
-import { logger } from '@scribemed/logging';
 import { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
+
+import { logger } from '@scribemed/logging';
 
 /**
  * Runtime database configuration resolved from environment variables or secrets.

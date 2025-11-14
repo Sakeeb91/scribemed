@@ -6,6 +6,8 @@ const {
   createLivenessHandler,
   createReadinessHandler,
   createHealthHandler,
+  createHealthConfigFromEnv,
+  getHealthMetrics,
 } = require('@scribemed/health');
 
 const PORT = Number(process.env.PORT ?? 8082);
@@ -16,16 +18,40 @@ const CATALOG = [
   { code: 'I10', description: 'Essential (primary) hypertension' },
 ];
 
-// Initialize health check handlers
-const livenessHandler = createLivenessHandler('coding');
-const readinessHandler = createReadinessHandler({
-  serviceName: 'coding',
-  checks: {},
-});
-const healthHandler = createHealthHandler({
-  serviceName: 'coding',
-  checks: {},
-});
+function createCatalogCheck() {
+  return () => {
+    const hasCatalog = CATALOG.length > 0;
+    return {
+      status: hasCatalog ? 'healthy' : 'unhealthy',
+      catalogSize: CATALOG.length,
+    };
+  };
+}
+
+function buildHealthHandlers() {
+  const healthOptions = createHealthConfigFromEnv('coding', {
+    cache: { ttlMs: Number(process.env.HEALTH_CACHE_TTL_MS ?? 2000) },
+    timeouts: { defaultMs: 1000, perCheck: { catalog: 250 } },
+    checks: {
+      catalog: {
+        run: createCatalogCheck(),
+        impact: 'non-critical',
+      },
+    },
+  });
+
+  return {
+    liveness: createLivenessHandler(healthOptions.serviceName),
+    readiness: createReadinessHandler(healthOptions),
+    health: createHealthHandler(healthOptions),
+  };
+}
+
+const {
+  liveness: livenessHandler,
+  readiness: readinessHandler,
+  health: healthHandler,
+} = buildHealthHandlers();
 
 function createServer() {
   return http.createServer(async (request, response) => {
@@ -51,6 +77,12 @@ function createServer() {
       const statusCode = health.status === 'healthy' ? 200 : 503;
       response.writeHead(statusCode, { 'Content-Type': 'application/json' });
       response.end(JSON.stringify(health));
+      return;
+    }
+
+    if (request.url === '/metrics') {
+      response.writeHead(200, { 'Content-Type': 'text/plain; version=0.0.4' });
+      response.end(getHealthMetrics());
       return;
     }
 

@@ -22,6 +22,7 @@ module.exports = {
   settings: {
     'import/resolver': {
       typescript: {
+        alwaysTryTypes: true,
         project: [
           './tsconfig.json',
           './packages/*/tsconfig.json',
@@ -29,11 +30,22 @@ module.exports = {
           './apps/*/tsconfig.json',
         ],
       },
+      node: {
+        extensions: ['.js', '.jsx', '.ts', '.tsx'],
+        moduleDirectory: ['node_modules', 'packages', 'services', 'apps'],
+      },
     },
+    'import/internal-regex': '^@scribemed/',
   },
   rules: {
     '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
     '@typescript-eslint/no-explicit-any': 'warn',
+    'import/no-unresolved': [
+      'error',
+      {
+        ignore: ['^@scribemed/'],
+      },
+    ],
     'import/order': [
       'error',
       {

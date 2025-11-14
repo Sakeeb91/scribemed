@@ -1,5 +1,6 @@
-import { logger } from '@scribemed/logging';
 import { NextFunction, Request, Response } from 'express';
+
+import { logger } from '@scribemed/logging';
 
 import { AppConfig } from '../config/env';
 import { JWTService } from '../services/jwt.service';

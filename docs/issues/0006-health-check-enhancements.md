@@ -114,6 +114,18 @@ The initial health check implementation (issue #5) provides a solid foundation w
 - Implement result caching with TTL
 - Add configuration options
 
+## Implementation Approach
+
+To close this issue we will evolve the `@scribemed/health` package rather than sprinkling bespoke logic in every service. The work will land in the following layers:
+
+1. **Configuration primitives** – introduce typed options that can be hydrated from environment variables so every service can tune thresholds, cache TTLs, and timeouts without code changes.
+2. **Execution pipeline** – normalize every health check definition, enforce per-check timeouts, and add short-lived caching to keep expensive checks from overwhelming shared dependencies.
+3. **Observability hooks** – emit structured logs, expose Prometheus metrics, and annotate every response with timing metadata so operators can trace slow or failing checks quickly.
+4. **Resilience patterns** – provide circuit breakers and dependency aggregation helpers (for downstream services) so issues in a single subsystem do not cascade through the platform.
+5. **Graceful degradation** – allow non-critical checks to downgrade overall status to `degraded` instead of `unhealthy`, improving rollout safety in partial outage scenarios.
+
+Each enhancement will ship with targeted tests and documentation updates to keep the health contract stable across the monorepo.
+
 ### Phase 2: Metrics Integration (2-3 days)
 
 - Add Prometheus metrics export
@@ -128,21 +140,21 @@ The initial health check implementation (issue #5) provides a solid foundation w
 
 ## Acceptance Criteria
 
-- [ ] Health checks have configurable timeouts
-- [ ] Health check results are cached with configurable TTL
-- [ ] Memory thresholds and timeouts are configurable via environment variables
-- [ ] Health checks export Prometheus metrics
-- [ ] Health check failures are logged with structured context
-- [ ] Circuit breaker pattern implemented for external dependencies
-- [ ] Documentation updated with new features and configuration options
-- [ ] Tests added for new functionality
+- [x] Health checks have configurable timeouts
+- [x] Health check results are cached with configurable TTL
+- [x] Memory thresholds and timeouts are configurable via environment variables
+- [x] Health checks export Prometheus-style metrics
+- [x] Health check failures are logged with structured context
+- [x] Circuit breaker pattern implemented for external dependencies
+- [x] Documentation updated with new features and configuration options
+- [x] Tests added for new functionality
 
 ## Related Issues
 
 - Issue #5: Implement Standardized Health Check System (completed)
 - Issue #15: CI/CD Pipeline (metrics integration needed)
 
-## Status: Open
+## Status: In Review
 
 ## Notes
 

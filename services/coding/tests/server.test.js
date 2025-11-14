@@ -59,3 +59,13 @@ test('GET /health/ready returns readiness status', async (t) => {
   assert.equal(payload.service, 'coding');
   assert(payload.status);
 });
+
+test('GET /metrics exposes Prometheus metrics', async (t) => {
+  const { server, url } = await startServer();
+  t.after(() => server.close());
+
+  const response = await fetch(`${url}/metrics`);
+  assert.equal(response.status, 200);
+  const body = await response.text();
+  assert(body.includes('scribemed_health_check_status'));
+});
