@@ -122,6 +122,9 @@ importers:
       '@scribemed/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@scribemed/health':
+        specifier: workspace:*
+        version: link:../../packages/health
       '@scribemed/logging':
         specifier: workspace:*
         version: link:../../packages/logging
