@@ -150,7 +150,7 @@ function createServer(options = {}) {
 
     if (request.url === '/metrics') {
       response.writeHead(200, { 'Content-Type': 'text/plain; version=0.0.4' });
-      response.end(healthModule.getHealthMetricsSnapshot());
+      response.end(healthModule.getHealthMetrics());
       return;
     }
 

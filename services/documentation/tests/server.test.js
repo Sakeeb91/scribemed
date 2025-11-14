@@ -62,7 +62,7 @@ function createMockHealthModule() {
         status: 'healthy',
         remoteService: serviceName,
       }),
-    getHealthMetricsSnapshot: () => 'scribemed_health_check_status 1',
+    getHealthMetrics: () => 'scribemed_health_check_status 1',
   };
 }
 

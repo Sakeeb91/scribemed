@@ -558,7 +558,7 @@ function serializeError(error: unknown) {
   return { message: String(error) };
 }
 
-export function getHealthMetricsSnapshot(): string {
+export function getHealthMetrics(): string {
   return defaultMetricsCollector.toPrometheus();
 }
 

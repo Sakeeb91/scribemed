@@ -11,7 +11,7 @@ const {
   createDatabaseCheck,
   createHealthConfigFromEnv,
   createRemoteHealthCheck,
-  getHealthMetricsSnapshot,
+  getHealthMetrics,
 } = require('../dist/index');
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -394,8 +394,8 @@ test('health handler records metrics via collector', async () => {
   assert.equal(statusEvent.status, 'degraded');
 });
 
-test('getHealthMetricsSnapshot returns Prometheus text', () => {
-  const snapshot = getHealthMetricsSnapshot();
+test('getHealthMetrics returns Prometheus text', () => {
+  const snapshot = getHealthMetrics();
   assert.equal(typeof snapshot, 'string');
   assert(snapshot.includes('scribemed_health_check_status'));
 });

@@ -7,7 +7,7 @@ const {
   createReadinessHandler,
   createHealthHandler,
   createHealthConfigFromEnv,
-  getHealthMetricsSnapshot,
+  getHealthMetrics,
 } = require('@scribemed/health');
 
 const PORT = Number(process.env.PORT ?? 8082);
@@ -82,7 +82,7 @@ function createServer() {
 
     if (request.url === '/metrics') {
       response.writeHead(200, { 'Content-Type': 'text/plain; version=0.0.4' });
-      response.end(getHealthMetricsSnapshot());
+      response.end(getHealthMetrics());
       return;
     }
 

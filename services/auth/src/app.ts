@@ -9,7 +9,7 @@ import {
   createHealthHandler,
   createLivenessHandler,
   createReadinessHandler,
-  getHealthMetricsSnapshot,
+  getHealthMetrics,
 } from '@scribemed/health';
 import { logger } from '@scribemed/logging';
 
@@ -61,7 +61,7 @@ export function createApp(config: AppConfig): Application {
   });
 
   app.get('/metrics', (_req: Request, res: Response) => {
-    res.type('text/plain').send(getHealthMetricsSnapshot());
+    res.type('text/plain').send(getHealthMetrics());
   });
 
   app.use((_req, res) => {
