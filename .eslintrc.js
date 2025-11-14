@@ -22,12 +22,17 @@ module.exports = {
   settings: {
     'import/resolver': {
       typescript: {
+        alwaysTryTypes: true,
         project: [
           './tsconfig.json',
           './packages/*/tsconfig.json',
           './services/*/tsconfig.json',
           './apps/*/tsconfig.json',
         ],
+      },
+      node: {
+        extensions: ['.js', '.jsx', '.ts', '.tsx'],
+        moduleDirectory: ['node_modules', 'packages', 'services', 'apps'],
       },
     },
   },
