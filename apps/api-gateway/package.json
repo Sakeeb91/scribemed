@@ -9,5 +9,8 @@
     "test": "echo 'API gateway tests - to be implemented'",
     "build": "echo 'API gateway build - to be implemented'",
     "clean": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\""
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21"
   }
 }
