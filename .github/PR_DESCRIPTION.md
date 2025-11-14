@@ -123,4 +123,3 @@ After merge, consider implementing enhancements from issue #6:
 - Circuit breaker pattern
 - Health check result caching
 - Configuration flexibility
-
