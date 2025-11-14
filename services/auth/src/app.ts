@@ -1,3 +1,7 @@
+import cors from 'cors';
+import express, { Application, NextFunction, Request, Response, json } from 'express';
+import helmet from 'helmet';
+
 import { getDatabase } from '@scribemed/database';
 import {
   createDatabaseCheck,
@@ -8,9 +12,6 @@ import {
   getHealthMetricsSnapshot,
 } from '@scribemed/health';
 import { logger } from '@scribemed/logging';
-import cors from 'cors';
-import express, { Application, NextFunction, Request, Response, json } from 'express';
-import helmet from 'helmet';
 
 import { AppConfig } from './config/env';
 import { createContainer } from './container';
