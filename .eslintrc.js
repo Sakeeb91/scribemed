@@ -35,10 +35,17 @@ module.exports = {
         moduleDirectory: ['node_modules', 'packages', 'services', 'apps'],
       },
     },
+    'import/internal-regex': '^@scribemed/',
   },
   rules: {
     '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
     '@typescript-eslint/no-explicit-any': 'warn',
+    'import/no-unresolved': [
+      'error',
+      {
+        ignore: ['^@scribemed/'],
+      },
+    ],
     'import/order': [
       'error',
       {
